@@ -187,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Emergency Hazard Alert Banner (Gas / Flame / Spoof)
+            // Emergency Hazard Alert Banner (Gas / Flame / Spoof / Rain / Camera Motion)
             if (recentSpoof != null)
               GestureDetector(
                 onTap: () {
@@ -205,16 +205,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             if (sensors.flameDetected)
               const HazardBanner(
-                title: '🔥 PERINGATAN: API TERDETEKSI!',
-                message: 'Sensor flame mendeteksi nyala api. Segera periksa area rumah!',
+                title: '🔥 PERINGATAN: API TERDETEKSI! (BUZZER AKTIF)',
+                message: 'Sensor flame mendeteksi nyala api. Alarm Buzzer otomatis berbunyi nyaring!',
                 icon: Icons.local_fire_department,
                 isDanger: true,
               ),
 
             if (sensors.isGasDanger)
               HazardBanner(
-                title: '⚠️ KEBOCORAN GAS BERBAHAYA!',
-                message: 'Kadar gas MQ-2 mencapai ${sensors.gasPpm.toStringAsFixed(0)} PPM (Ambang Bahaya > 400). Buka ventilasi!',
+                title: '⚠️ KEBOCORAN GAS BERBAHAYA! (BUZZER AKTIF)',
+                message: 'Kadar gas MQ-2 mencapai ${sensors.gasPpm.toStringAsFixed(0)} PPM (> 400). Alarm Buzzer otomatis berbunyi nyaring!',
                 icon: Icons.gas_meter,
                 isDanger: true,
               )
@@ -226,6 +226,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 isDanger: false,
               ),
 
+            // Live Camera Active notification on PIR Motion
+            if (sensors.motionDetected)
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SecurityScreen()),
+                  );
+                },
+                child: const HazardBanner(
+                  title: '📹 KAMERA TERAS AKTIF: GERAKAN TERDETEKSI!',
+                  message: 'Sensor PIR mendeteksi pergerakan di teras. Kamera otomatis aktif memantau & menyalakan lampu.',
+                  icon: Icons.videocam,
+                  isDanger: false,
+                ),
+              ),
+
+            // Rain sensor notification
+            if (sensors.rainDetected)
+              HazardBanner(
+                title: '🌧️ HUJAN TERDETEKSI: ATAP OTOMATIS MENUTUP',
+                message: devices.roofAutoMode
+                    ? 'Sensor hujan aktif. Kanopi atap telah ditutup otomatis demi keamanan.'
+                    : 'Sensor hujan aktif. Mode atap saat ini manual (${devices.roofOpen ? "Masih Terbuka" : "Tertutup"}).',
+                icon: Icons.water_drop,
+                isDanger: false,
+              ),
+
             if (_error != null)
               NeuBox(
                 margin: const EdgeInsets.only(bottom: 14),
@@ -233,37 +260,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Text('Koneksi: $_error', style: const TextStyle(fontSize: 11, color: AppColors.danger)),
               ),
 
-            // 1. Featured Air Conditioner / Peltier Cooling Dial Card (Exact match of reference image)
+            // 1. Featured Peltier Cooling with MOSFET PWM Dial Card
             AcDialCard(
               currentTemp: sensors.temperature,
               targetTemp: devices.targetTemperature,
               isOn: devices.coolingOn,
               isAutoMode: devices.coolingAutoMode,
+              peltierPwm: devices.peltierPwm,
               onToggle: (val) => _quickToggle('cooling', val),
               onTempChanged: (newTemp) => _quickToggle('target_temp', newTemp),
+              onAutoModeChanged: (val) => _quickToggle('cooling_auto_mode', val),
             ),
             const SizedBox(height: 20),
 
-            // 2. Quick Scene / Automation Cards (Matching Reference Bottom-Left)
+            // 2. Quick Scene / Automation Cards: Lampu (PIR & LDR) + Atap (Sensor Hujan)
             Row(
               children: [
                 Expanded(
                   child: SceneCard(
                     icon: Icons.wb_sunny_outlined,
-                    title: 'Otomatis Cahaya',
-                    subtitle: devices.lightAutoMode ? 'LDR Aktif' : 'Manual',
-                    isActive: devices.lightAutoMode,
+                    title: 'Lampu & Teras',
+                    subtitle: devices.lightAutoMode
+                        ? (sensors.motionDetected ? 'Gerakan! Lampu ON' : (sensors.isDark ? 'Gelap: Lampu ON' : 'PIR/LDR Siaga'))
+                        : 'Manual Mode',
+                    isActive: devices.lightOn,
                     onTap: () => _quickToggle('light_auto_mode', !devices.lightAutoMode),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: SceneCard(
-                    icon: Icons.nights_stay_outlined,
-                    title: 'Pintu Utama',
-                    subtitle: devices.doorLocked ? 'Terkunci Aman' : 'Kunci Terbuka',
-                    isActive: devices.doorLocked,
-                    onTap: () => _quickToggle('door_lock', !devices.doorLocked),
+                    icon: devices.roofOpen ? Icons.roofing : Icons.umbrella,
+                    title: 'Atap Rumah',
+                    subtitle: devices.roofAutoMode
+                        ? (sensors.rainDetected ? 'Hujan (Tertutup)' : 'Cerah (Terbuka)')
+                        : (devices.roofOpen ? 'Buka Manual' : 'Tutup Manual'),
+                    isActive: devices.roofOpen,
+                    onTap: () => _quickToggle('roof', !devices.roofOpen),
                   ),
                 ),
               ],
@@ -374,11 +407,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Pill List Stack matching reference exactly
+                  // Pill List Stack
                   DevicePillTile(
                     icon: Icons.lightbulb_outline,
-                    title: 'Lampu Penerangan',
-                    subtitle: devices.lightOn ? 'Menyala • Mode Otomatis' : 'Mati • Standby',
+                    title: 'Lampu Penerangan (PIR & LDR)',
+                    subtitle: devices.lightOn
+                        ? 'Menyala • ${devices.lightAutoMode ? (sensors.motionDetected ? "PIR Gerakan Aktif" : "LDR Otomatis") : "Manual"}'
+                        : 'Mati • Siaga',
                     onTap: () => _quickToggle('light', !devices.lightOn),
                     trailing: Text(
                       devices.lightOn ? 'ON' : 'OFF',
@@ -387,6 +422,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         fontWeight: FontWeight.bold,
                         color: devices.lightOn ? AppColors.textPrimary : AppColors.textMuted,
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DevicePillTile(
+                    icon: Icons.videocam_outlined,
+                    title: 'Kamera Teras',
+                    subtitle: sensors.motionDetected
+                        ? '🟢 AKTIF • PIR Mendeteksi Gerakan'
+                        : '⚪ Standby • Area Teras Sepi',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SecurityScreen()),
+                      );
+                    },
+                    trailing: Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: sensors.motionDetected ? AppColors.normal : AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DevicePillTile(
+                    icon: Icons.roofing_outlined,
+                    title: 'Atap Rumah (Kanopi)',
+                    subtitle: '${devices.roofOpen ? "Terbuka" : "Tertutup"} • ${devices.roofAutoMode ? (sensors.rainDetected ? "Otomatis: Tutup karena Hujan" : "Otomatis: Buka karena Cerah") : "Mode Manual"}',
+                    onTap: () => _quickToggle('roof', !devices.roofOpen),
+                    trailing: Text(
+                      devices.roofOpen ? 'OPEN' : 'CLOSED',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: devices.roofOpen ? AppColors.textPrimary : AppColors.warning,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DevicePillTile(
+                    icon: Icons.umbrella_outlined,
+                    title: 'Sensor Hujan',
+                    subtitle: sensors.rainDetected ? '🌧️ Hujan Sedang Turun' : '☀️ Kering / Tidak Hujan',
+                    trailing: Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: sensors.rainDetected ? AppColors.activeBlue : AppColors.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DevicePillTile(
+                    icon: Icons.notifications_active_outlined,
+                    title: 'Alarm Buzzer (Flame & MQ-2)',
+                    subtitle: devices.buzzerOn
+                        ? '🚨 BERBUNYI NYARING • Peringatan Api/Gas!'
+                        : '🔕 Senyap • Kondisi Aman',
+                    trailing: Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: devices.buzzerOn ? AppColors.danger : AppColors.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DevicePillTile(
+                    icon: Icons.local_fire_department_outlined,
+                    title: 'Sensor Api (Flame)',
+                    subtitle: sensors.flameDetected ? 'API TERDETEKSI! Output Buzzer Aktif' : 'Aman • Tidak ada api',
+                    trailing: Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: sensors.flameDetected ? AppColors.danger : AppColors.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  DevicePillTile(
+                    icon: Icons.gas_meter_outlined,
+                    title: 'Sensor Gas MQ-2',
+                    subtitle: '${sensors.gasPpm.toStringAsFixed(0)} PPM • ${sensors.isGasDanger ? "BAHAYA (Buzzer ON)" : (sensors.isGasWarning ? "Waspada" : "Normal")}',
+                    trailing: Icon(
+                      Icons.circle,
+                      size: 10,
+                      color: sensors.isGasDanger ? AppColors.danger : (sensors.isGasWarning ? AppColors.warning : AppColors.normal),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -403,42 +523,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         fontWeight: FontWeight.bold,
                         color: devices.doorLocked ? AppColors.normal : AppColors.warning,
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  DevicePillTile(
-                    icon: Icons.gas_meter_outlined,
-                    title: 'Sensor Gas MQ-2',
-                    subtitle: '${sensors.gasPpm.toStringAsFixed(0)} PPM • ${sensors.isGasDanger ? "BAHAYA" : (sensors.isGasWarning ? "Waspada" : "Normal")}',
-                    trailing: Icon(
-                      Icons.circle,
-                      size: 10,
-                      color: sensors.isGasDanger ? AppColors.danger : (sensors.isGasWarning ? AppColors.warning : AppColors.normal),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  DevicePillTile(
-                    icon: Icons.local_fire_department_outlined,
-                    title: 'Sensor Api (Flame)',
-                    subtitle: sensors.flameDetected ? 'API TERDETEKSI!' : 'Aman • Tidak ada api',
-                    trailing: Icon(
-                      Icons.circle,
-                      size: 10,
-                      color: sensors.flameDetected ? AppColors.danger : AppColors.normal,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  DevicePillTile(
-                    icon: Icons.motion_photos_on_outlined,
-                    title: 'Sensor PIR (Pintu Depan)',
-                    subtitle: sensors.motionDetected ? 'Ada orang di depan pintu' : 'Area sepi',
-                    trailing: Icon(
-                      Icons.circle,
-                      size: 10,
-                      color: sensors.motionDetected ? AppColors.activeBlue : AppColors.textMuted,
                     ),
                   ),
                   const SizedBox(height: 12),

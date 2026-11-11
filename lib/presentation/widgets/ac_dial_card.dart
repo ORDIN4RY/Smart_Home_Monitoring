@@ -8,8 +8,10 @@ class AcDialCard extends StatelessWidget {
   final double targetTemp;
   final bool isOn;
   final bool isAutoMode;
+  final int? peltierPwm;
   final ValueChanged<bool> onToggle;
   final ValueChanged<double>? onTempChanged;
+  final ValueChanged<bool>? onAutoModeChanged;
 
   const AcDialCard({
     super.key,
@@ -17,12 +19,16 @@ class AcDialCard extends StatelessWidget {
     required this.targetTemp,
     required this.isOn,
     required this.isAutoMode,
+    this.peltierPwm,
     required this.onToggle,
     this.onTempChanged,
+    this.onAutoModeChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final pwmValue = (isOn ? (peltierPwm ?? 0) : 0).clamp(0, 100);
+
     return NeuBox(
       padding: const EdgeInsets.all(20),
       borderRadius: BorderRadius.circular(28),
@@ -49,7 +55,7 @@ class AcDialCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Air Conditioner',
+                      'Pendingin Peltier',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -59,7 +65,7 @@ class AcDialCard extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Peltier Auto Cooling',
+                      'Kontrol Modul MOSFET PWM',
                       style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
@@ -68,7 +74,7 @@ class AcDialCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Neumorphic On/Off Pill exactly like image ("On. ⏻")
+              // Neumorphic On/Off Pill ("On. ⏻" / "Off. ⏻")
               NeuBox(
                 onTap: () => onToggle(!isOn),
                 isPressed: isOn,
@@ -98,43 +104,65 @@ class AcDialCard extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // Small Timer / Auto Badge
+          // Auto Mode Badge / Toggle & Target Info
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.neuBase,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.neuDarkShadow.withAlpha(120),
-                      offset: const Offset(1.5, 1.5),
-                      blurRadius: 3,
-                    ),
-                    const BoxShadow(
-                      color: AppColors.neuLightShadow,
-                      offset: Offset(-1.5, -1.5),
-                      blurRadius: 3,
-                    ),
-                  ],
+              GestureDetector(
+                onTap: onAutoModeChanged != null
+                    ? () => onAutoModeChanged!(!isAutoMode)
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.neuBase,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.neuDarkShadow.withAlpha(isAutoMode ? 160 : 100),
+                        offset: const Offset(1.5, 1.5),
+                        blurRadius: 3,
+                      ),
+                      const BoxShadow(
+                        color: AppColors.neuLightShadow,
+                        offset: Offset(-1.5, -1.5),
+                        blurRadius: 3,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isAutoMode ? Icons.auto_awesome : Icons.tune,
+                        size: 12,
+                        color: isAutoMode ? AppColors.activeBlue : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        isAutoMode ? 'Auto Suhu ON' : 'Manual Mode',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isAutoMode ? AppColors.textPrimary : AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.alarm, size: 12, color: AppColors.textSecondary),
-                    SizedBox(width: 4),
-                    Text(
-                      'Auto',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
-                    ),
-                  ],
+              ),
+              const Spacer(),
+              Text(
+                'Suhu Ruang: ${currentTemp.toStringAsFixed(1)}°C',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Semi-circular Dial Gauge with Radial Ticks & Pointer
           Center(
@@ -153,9 +181,9 @@ class AcDialCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        '${targetTemp.toStringAsFixed(0)}°',
+                        '${targetTemp.toStringAsFixed(0)}°C',
                         style: const TextStyle(
-                          fontSize: 36,
+                          fontSize: 34,
                           fontWeight: FontWeight.bold,
                           color: AppColors.textPrimary,
                           letterSpacing: -1,
@@ -164,7 +192,7 @@ class AcDialCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       const Text(
-                        'Temprature',
+                        'Target Suhu',
                         style: TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -179,9 +207,9 @@ class AcDialCard extends StatelessWidget {
             ),
           ),
 
-          // Quick Temperature Steppers / Adjustment Slider
+          // Quick Temperature Steppers / Adjustment
           if (onTempChanged != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -193,12 +221,12 @@ class AcDialCard extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   child: const Icon(Icons.remove, size: 16, color: AppColors.textPrimary),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 20),
                 Text(
-                  'Ruangan: ${currentTemp.toStringAsFixed(1)}°C',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+                  'Set Target: ${targetTemp.toStringAsFixed(0)}°C',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
-                const SizedBox(width: 24),
+                const SizedBox(width: 20),
                 NeuBox(
                   onTap: () {
                     if (targetTemp < 32) onTempChanged!(targetTemp + 1);
@@ -210,6 +238,76 @@ class AcDialCard extends StatelessWidget {
               ],
             ),
           ],
+
+          const SizedBox(height: 16),
+
+          // Modul MOSFET PWM Duty Cycle Box
+          NeuBox(
+            isPressed: true,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.bolt,
+                          size: 15,
+                          color: isOn ? AppColors.activeBlue : AppColors.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Modul MOSFET PWM:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      isOn ? '$pwmValue%' : 'OFF (0%)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isOn ? AppColors.textPrimary : AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Neumorphic Bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    height: 6,
+                    color: const Color(0xFFD3DCE8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        width: MediaQuery.of(context).size.width * (pwmValue / 100),
+                        color: isOn ? const Color(0xFF242C38) : Colors.transparent,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isOn
+                      ? (isAutoMode
+                          ? 'Otomatis menyesuaikan duty cycle PWM sesuai suhu yang diinginkan.'
+                          : 'Peltier beroperasi pada daya manual modul MOSFET.')
+                      : 'Peltier mati. Tidak ada arus PWM yang dialirkan MOSFET.',
+                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

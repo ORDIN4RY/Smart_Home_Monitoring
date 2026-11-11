@@ -209,30 +209,112 @@ class _DeviceControlScreenState extends State<DeviceControlScreen> {
             ),
             const SizedBox(height: 20),
 
-            // 2. Air Conditioner / Peltier Cooling Dial Card
+            // 2. Air Conditioner / Peltier Cooling Dial Card with MOSFET PWM
             AcDialCard(
               currentTemp: currentTemp,
               targetTemp: dev.targetTemperature,
               isOn: dev.coolingOn,
               isAutoMode: dev.coolingAutoMode,
+              peltierPwm: dev.peltierPwm,
               onToggle: (val) => _toggleDevice('cooling', val),
               onTempChanged: (newTemp) => _toggleDevice('target_temp', newTemp),
+              onAutoModeChanged: (val) => _toggleDevice('cooling_auto_mode', val),
             ),
             const SizedBox(height: 20),
 
-            // 3. Lampu Penerangan
+            // 3. Kontrol Atap Rumah (Sensor Hujan: Otomatis & Manual)
+            DeviceSwitchCard(
+              icon: Icons.roofing_outlined,
+              title: 'Atap Rumah (Kanopi)',
+              description: dev.roofOpen ? 'Atap Terbuka' : 'Atap Tertutup Rapat',
+              isOn: dev.roofOpen,
+              isAutoMode: dev.roofAutoMode,
+              onToggle: (val) => _toggleDevice('roof', val),
+              onAutoModeChanged: (val) => _toggleDevice('roof_auto_mode', val),
+              extraWidget: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          (_sensors?.rainDetected ?? false) ? Icons.water_drop : Icons.wb_sunny_outlined,
+                          size: 14,
+                          color: (_sensors?.rainDetected ?? false) ? AppColors.activeBlue : AppColors.normal,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          (_sensors?.rainDetected ?? false)
+                              ? 'Sensor Hujan: 🌧️ Hujan Terdeteksi'
+                              : 'Sensor Hujan: ☀️ Kering / Tidak Hujan',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: (_sensors?.rainDetected ?? false) ? AppColors.activeBlue : AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Mode Otomatis menutup atap seketika sensor hujan mendeteksi air, dan membuka kembali saat cerah. Anda juga dapat membuka/menutup secara manual.',
+                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 4. Lampu Penerangan & Teras (PIR & LDR)
             DeviceSwitchCard(
               icon: Icons.lightbulb_outline,
-              title: 'Lampu Penerangan',
+              title: 'Lampu Penerangan & Teras',
               description: dev.lightOn ? 'Lampu sedang Menyala' : 'Lampu Mati',
               isOn: dev.lightOn,
               isAutoMode: dev.lightAutoMode,
               onToggle: (val) => _toggleDevice('light', val),
               onAutoModeChanged: (val) => _toggleDevice('light_auto_mode', val),
+              extraWidget: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (_sensors?.motionDetected ?? false)
+                          ? 'PIR: 🟢 Ada Gerakan di Teras (Kamera Aktif)'
+                          : 'PIR: ⚪ Tidak ada gerakan di teras',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: (_sensors?.motionDetected ?? false) ? AppColors.normal : AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Mode Auto terhubung ke sensor LDR (gelap < 30%) dan sensor PIR (gerakan teras). Saat PIR aktif, kamera juga otomatis diaktifkan.',
+                      style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 5. Output Buzzer Peringatan (Flame & MQ-2 Gas)
+            DeviceSwitchCard(
+              icon: Icons.notifications_active_outlined,
+              title: 'Alarm Buzzer (Flame & MQ-2)',
+              description: dev.buzzerOn
+                  ? '🚨 ALARM AKTIF (Bahaya Api/Gas Terdeteksi!)'
+                  : '🔕 Senyap • Standby Aman',
+              isOn: dev.buzzerOn,
+              onToggle: (val) => _toggleDevice('buzzer', val),
               extraWidget: const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
-                  'Mode Auto menyalakan lampu secara otomatis jika sensor LDR membaca cahaya redup/gelap (< 30%).',
+                  'Output Buzzer didedikasikan khusus sebagai peringatan suara darurat saat sensor flame mendeteksi nyala api atau sensor MQ-2 membaca gas berbahaya (> 400 PPM).',
                   style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
               ),

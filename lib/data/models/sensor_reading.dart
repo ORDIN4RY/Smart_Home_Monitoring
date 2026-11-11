@@ -5,6 +5,7 @@ class SensorReading {
   final double gasPpm;
   final bool flameDetected;
   final bool motionDetected;
+  final bool rainDetected;
   final bool doorOpen;
   final DateTime timestamp;
 
@@ -15,6 +16,7 @@ class SensorReading {
     required this.gasPpm,
     required this.flameDetected,
     required this.motionDetected,
+    this.rainDetected = false,
     required this.doorOpen,
     required this.timestamp,
   });
@@ -22,6 +24,10 @@ class SensorReading {
   bool get isGasDanger => gasPpm >= 400;
   bool get isGasWarning => gasPpm >= 200 && gasPpm < 400;
   bool get isTempHigh => temperature >= 32;
+  bool get isDark => lightIntensity < 30.0;
+  bool get isRaining => rainDetected;
+  bool get isPorchCameraActive => motionDetected;
+  bool get buzzerActive => flameDetected || isGasDanger;
   bool get hasEmergency => flameDetected || isGasDanger;
 
   factory SensorReading.fromJson(Map<String, dynamic> json) {
@@ -32,6 +38,7 @@ class SensorReading {
       gasPpm: (json['gas_ppm'] as num?)?.toDouble() ?? 0.0,
       flameDetected: json['flame_detected'] as bool? ?? false,
       motionDetected: json['motion_detected'] as bool? ?? false,
+      rainDetected: json['rain_detected'] as bool? ?? false,
       doorOpen: json['door_open'] as bool? ?? false,
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
@@ -47,6 +54,7 @@ class SensorReading {
       'gas_ppm': gasPpm,
       'flame_detected': flameDetected,
       'motion_detected': motionDetected,
+      'rain_detected': rainDetected,
       'door_open': doorOpen,
       'timestamp': timestamp.toIso8601String(),
     };
@@ -59,6 +67,7 @@ class SensorReading {
     double? gasPpm,
     bool? flameDetected,
     bool? motionDetected,
+    bool? rainDetected,
     bool? doorOpen,
     DateTime? timestamp,
   }) {
@@ -69,6 +78,7 @@ class SensorReading {
       gasPpm: gasPpm ?? this.gasPpm,
       flameDetected: flameDetected ?? this.flameDetected,
       motionDetected: motionDetected ?? this.motionDetected,
+      rainDetected: rainDetected ?? this.rainDetected,
       doorOpen: doorOpen ?? this.doorOpen,
       timestamp: timestamp ?? this.timestamp,
     );

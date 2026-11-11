@@ -20,9 +20,14 @@ class MockDataGenerator {
     lightOn: false,
     coolingOn: true,
     doorLocked: true,
+    roofOpen: true,
+    buzzerOn: false,
+    porchCameraActive: false,
     lightAutoMode: true,
     coolingAutoMode: true,
+    roofAutoMode: true,
     targetTemperature: 24.0,
+    peltierPwm: 75,
     lastUpdated: DateTime.now(),
   );
 
@@ -33,6 +38,7 @@ class MockDataGenerator {
     gasPpm: 95.0,
     flameDetected: false,
     motionDetected: false,
+    rainDetected: false,
     doorOpen: false,
     timestamp: DateTime.now(),
   );
@@ -136,6 +142,11 @@ class MockDataGenerator {
     double newGas = (currentSensor.gasPpm + gasDelta).clamp(40.0, 600.0);
 
     bool newMotion = _random.nextInt(10) > 7;
+    // Sesekali simulasi status hujan berubah
+    bool newRain = currentSensor.rainDetected;
+    if (_random.nextInt(35) == 0) {
+      newRain = !newRain;
+    }
 
     currentSensor = currentSensor.copyWith(
       temperature: double.parse(newTemp.toStringAsFixed(1)),
@@ -143,23 +154,54 @@ class MockDataGenerator {
       lightIntensity: double.parse(newLight.toStringAsFixed(1)),
       gasPpm: double.parse(newGas.toStringAsFixed(1)),
       motionDetected: newMotion,
+      rainDetected: newRain,
       timestamp: DateTime.now(),
     );
 
-    // Automated device rules
+    // 1. Logika PIR & LDR untuk Lampu & Teras (Kamera aktif saat ada gerakan)
+    bool newLightOn = deviceStatus.lightOn;
     if (deviceStatus.lightAutoMode) {
-      bool shouldLightBeOn = currentSensor.lightIntensity < 30.0;
-      if (shouldLightBeOn != deviceStatus.lightOn) {
-        deviceStatus = deviceStatus.copyWith(lightOn: shouldLightBeOn);
-      }
+      // Lampu menyala jika intensitas cahaya redup (< 30) ATAU terdeteksi gerakan PIR
+      newLightOn = currentSensor.lightIntensity < 30.0 || newMotion;
+    }
+    bool cameraActive = newMotion;
+
+    // 2. Logika Sensor Flame & MQ-2: Peringatan HANYA ke Buzzer
+    bool buzzerAlert = currentSensor.flameDetected || currentSensor.isGasDanger;
+
+    // 3. Logika Sensor Hujan & Atap Rumah (Otomatis vs Manual)
+    bool newRoofOpen = deviceStatus.roofOpen;
+    if (deviceStatus.roofAutoMode) {
+      // Otomatis: Hujan -> Atap Menutup; Kering -> Atap Membuka
+      newRoofOpen = !newRain;
     }
 
-    if (deviceStatus.coolingAutoMode) {
-      bool shouldCoolingBeOn = currentSensor.temperature > deviceStatus.targetTemperature;
-      if (shouldCoolingBeOn != deviceStatus.coolingOn) {
-        deviceStatus = deviceStatus.copyWith(coolingOn: shouldCoolingBeOn);
+    // 4. Logika Peltier & Modul MOSFET PWM (Penyesuaian Suhu Otomatis)
+    int calculatedPwm = 0;
+    if (deviceStatus.coolingOn) {
+      if (deviceStatus.coolingAutoMode) {
+        // Otomatis menyesuaikan suhu ruangan ke targetTemperature via duty cycle PWM
+        double diff = currentSensor.temperature - deviceStatus.targetTemperature;
+        if (diff > 0) {
+          calculatedPwm = ((diff / 4.0) * 80 + 20).clamp(20, 100).round();
+        } else {
+          calculatedPwm = 0;
+        }
+      } else {
+        calculatedPwm = 80;
       }
+    } else {
+      calculatedPwm = 0;
     }
+
+    deviceStatus = deviceStatus.copyWith(
+      lightOn: newLightOn,
+      porchCameraActive: cameraActive,
+      buzzerOn: buzzerAlert,
+      roofOpen: newRoofOpen,
+      peltierPwm: calculatedPwm,
+      lastUpdated: DateTime.now(),
+    );
 
     return currentSensor;
   }
@@ -177,6 +219,7 @@ class MockDataGenerator {
           gasPpm: 70.0 + (_random.nextDouble() * 60.0),
           flameDetected: false,
           motionDetected: i % 4 == 0,
+          rainDetected: false,
           doorOpen: false,
           timestamp: now.subtract(Duration(minutes: i * 10)),
         ),
@@ -192,7 +235,15 @@ class MockDataGenerator {
         deviceStatus = deviceStatus.copyWith(lightOn: value as bool);
         break;
       case 'cooling':
-        deviceStatus = deviceStatus.copyWith(coolingOn: value as bool);
+        final isOn = value as bool;
+        int pwm = 0;
+        if (isOn) {
+          double diff = currentSensor.temperature - deviceStatus.targetTemperature;
+          pwm = deviceStatus.coolingAutoMode
+              ? (diff > 0 ? ((diff / 4.0) * 80 + 20).clamp(20, 100).round() : 0)
+              : 80;
+        }
+        deviceStatus = deviceStatus.copyWith(coolingOn: isOn, peltierPwm: pwm);
         break;
       case 'door_lock':
         deviceStatus = deviceStatus.copyWith(doorLocked: value as bool);
@@ -210,14 +261,64 @@ class MockDataGenerator {
           ),
         );
         break;
+      case 'roof':
+        deviceStatus = deviceStatus.copyWith(roofOpen: value as bool);
+        eventLogs.insert(
+          0,
+          EventLog(
+            id: 'evt_${DateTime.now().millisecondsSinceEpoch}',
+            title: value == true ? 'Atap Dibuka Manual' : 'Atap Ditutup Manual',
+            description: value == true
+                ? 'Atap rumah dibuka secara manual dari aplikasi.'
+                : 'Atap rumah ditutup secara manual dari aplikasi.',
+            category: 'device',
+            severity: EventSeverity.normal,
+            timestamp: DateTime.now(),
+          ),
+        );
+        break;
+      case 'roof_auto_mode':
+        final isAuto = value as bool;
+        bool roofState = deviceStatus.roofOpen;
+        if (isAuto) {
+          roofState = !currentSensor.rainDetected;
+        }
+        deviceStatus = deviceStatus.copyWith(roofAutoMode: isAuto, roofOpen: roofState);
+        break;
       case 'target_temp':
-        deviceStatus = deviceStatus.copyWith(targetTemperature: (value as num).toDouble());
+        final newTarget = (value as num).toDouble();
+        int pwm = deviceStatus.peltierPwm;
+        if (deviceStatus.coolingOn && deviceStatus.coolingAutoMode) {
+          double diff = currentSensor.temperature - newTarget;
+          pwm = diff > 0 ? ((diff / 4.0) * 80 + 20).clamp(20, 100).round() : 0;
+        }
+        deviceStatus = deviceStatus.copyWith(targetTemperature: newTarget, peltierPwm: pwm);
         break;
       case 'light_auto_mode':
         deviceStatus = deviceStatus.copyWith(lightAutoMode: value as bool);
         break;
       case 'cooling_auto_mode':
-        deviceStatus = deviceStatus.copyWith(coolingAutoMode: value as bool);
+        final auto = value as bool;
+        int pwm = 0;
+        if (deviceStatus.coolingOn) {
+          if (auto) {
+            double diff = currentSensor.temperature - deviceStatus.targetTemperature;
+            pwm = diff > 0 ? ((diff / 4.0) * 80 + 20).clamp(20, 100).round() : 0;
+          } else {
+            pwm = 80;
+          }
+        }
+        deviceStatus = deviceStatus.copyWith(coolingAutoMode: auto, peltierPwm: pwm);
+        break;
+      case 'buzzer':
+        deviceStatus = deviceStatus.copyWith(buzzerOn: value as bool);
+        break;
+      case 'rain_simulate':
+        final isRain = value as bool;
+        currentSensor = currentSensor.copyWith(rainDetected: isRain);
+        if (deviceStatus.roofAutoMode) {
+          deviceStatus = deviceStatus.copyWith(roofOpen: !isRain);
+        }
         break;
     }
     deviceStatus = deviceStatus.copyWith(lastUpdated: DateTime.now());
