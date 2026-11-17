@@ -51,7 +51,12 @@ class AccessAttempt {
   final double? similarityScore; // Skor cosine similarity (0.0 – 1.0)
   final double? threshold;       // Threshold backend (default 0.50)
   final int? latencyMs;          // Response latency dalam milidetik
-  final Map<String, dynamic>? bbox; // Koordinat bounding box YuNet: {x, y, w, h, frame_w, frame_h}
+  final Map<String, dynamic>? bbox; // Koordinat bounding box: {x, y, w, h, frame_w, frame_h}
+  final String mode;             // 'ai' (Sistem Cerdas) atau 'cv' (Computer Vision)
+  final String? method;          // e.g. "YuNet + SFace (Deep Learning)" atau "Haar + LBPH (Computer Vision)"
+  final double? distance;        // Jarak Chi-Square / Euclidean untuk CV
+  final List<String>? pipelineStages; // Tahapan pipeline Computer Vision klasik
+  final List<Map<String, String>>? pipelinePreviews; // Thumbnail base64 tahapan CV (Crop, Gray, LBP)
 
   const AccessAttempt({
     required this.id,
@@ -65,9 +70,15 @@ class AccessAttempt {
     this.threshold,
     this.latencyMs,
     this.bbox,
+    this.mode = 'ai',
+    this.method,
+    this.distance,
+    this.pipelineStages,
+    this.pipelinePreviews,
   });
 
   bool get isSpoofAttack => !isLivenessPassed;
+  bool get isCvMode => mode == 'cv';
 
   // Alias getter untuk kemudahan di UI
   bool get granted => isAuthorized;
@@ -90,8 +101,8 @@ class AccessAttempt {
       bboxX != null && bboxY != null && bboxW != null && bboxH != null && (frameW ?? 0) > 0 && (frameH ?? 0) > 0;
 
   /// Parse dari response Flask /api/status atau /api/recognize
-  /// Field Flask: "wajah", "granted", "liveness", "liveness_skor", "skor", "threshold", "catatan", "waktu", "bbox"
-  factory AccessAttempt.fromJson(Map<String, dynamic> json, {int? latency}) {
+  /// Field Flask: "wajah", "granted", "liveness", "liveness_skor", "skor", "threshold", "catatan", "waktu", "bbox", "mode", "metode", "tahapan", "distance"
+  factory AccessAttempt.fromJson(Map<String, dynamic> json, {int? latency, String defaultMode = 'ai'}) {
     // Dukung field Flask maupun field lama untuk kompatibilitas
     final liveness = json['liveness'] ?? json['is_liveness_passed'];
     final granted  = json['granted']  ?? json['is_authorized'] ?? false;
@@ -102,6 +113,28 @@ class AccessAttempt {
     final note     = json['catatan'] ?? json['message'] ?? json['error'] ?? '';
     final ts       = json['waktu'] ?? json['timestamp'];
     final bboxMap  = json['bbox'] is Map ? Map<String, dynamic>.from(json['bbox']) : null;
+    final parsedMode = json['mode']?.toString() ?? defaultMode;
+    final parsedMethod = json['metode'] ?? json['method'];
+    final parsedDist = (json['distance'] ?? json['distance_chi2']) as num?;
+    final stagesRaw = json['tahapan'] ?? json['pipeline_stages'];
+    List<String>? stages;
+    if (stagesRaw is List) {
+      stages = stagesRaw.map((e) => e.toString()).toList();
+    }
+
+    final previewsRaw = json['previews'] ?? json['pipeline_previews'];
+    List<Map<String, String>>? previews;
+    if (previewsRaw is List) {
+      previews = previewsRaw.map((e) {
+        if (e is Map) {
+          return {
+            'label': e['label']?.toString() ?? '',
+            'image': e['image']?.toString() ?? '',
+          };
+        }
+        return <String, String>{};
+      }).toList();
+    }
 
     return AccessAttempt(
       id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
@@ -117,6 +150,11 @@ class AccessAttempt {
       threshold: (thresh as num?)?.toDouble() ?? 0.50,
       latencyMs: latency,
       bbox: bboxMap,
+      mode: parsedMode,
+      method: parsedMethod?.toString(),
+      distance: parsedDist?.toDouble(),
+      pipelineStages: stages,
+      pipelinePreviews: previews,
     );
   }
 
@@ -132,5 +170,9 @@ class AccessAttempt {
         'threshold': threshold,
         'latency_ms': latencyMs,
         'bbox': bbox,
+        'mode': mode,
+        'metode': method,
+        'distance': distance,
+        'tahapan': pipelineStages,
       };
 }

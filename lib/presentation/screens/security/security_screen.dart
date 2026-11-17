@@ -586,11 +586,25 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Live Camera Test Banner Plate
+                    // ── 2 Fitur Uji Kamera: Sistem Cerdas vs Computer Vision ──
+                    const Text(
+                      'Fitur Pengujian Kamera',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Fitur 1: Sistem Cerdas (AI / SFace Pretrained)
                     NeuBox(
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const LiveCameraTestScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => const LiveCameraTestScreen(initialMode: CameraTestMode.ai),
+                          ),
                         );
                       },
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -606,7 +620,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             glowColor: AppColors.activeBlue.withAlpha(40),
                             glowRadius: 6,
                             child: const Icon(
-                              Icons.videocam_outlined,
+                              Icons.psychology_outlined,
                               color: AppColors.activeBlue,
                               size: 22,
                             ),
@@ -619,7 +633,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                 Row(
                                   children: [
                                     Text(
-                                      'Uji Kamera Real-Time',
+                                      'Uji Sistem Cerdas (AI)',
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.bold,
@@ -627,12 +641,72 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                       ),
                                     ),
                                     SizedBox(width: 8),
-                                    StatusBadge(label: 'LIVE SCAN', type: BadgeType.active),
+                                    StatusBadge(label: 'PRETRAINED', type: BadgeType.active),
                                   ],
                                 ),
                                 SizedBox(height: 3),
                                 Text(
-                                  'Uji akurasi pencocokan wajah & liveness langsung dari kamera HP.',
+                                  'Model Deep Learning: Deteksi YuNet + SFace (128-D) + MiniFASNet anti-spoofing.',
+                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Fitur 2: Computer Vision Klasik (LBPH Non-Pretrained)
+                    NeuBox(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const LiveCameraTestScreen(initialMode: CameraTestMode.cv),
+                          ),
+                        );
+                      },
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      borderRadius: BorderRadius.circular(20),
+                      glowColor: AppColors.primary.withAlpha(40),
+                      glowRadius: 8,
+                      child: Row(
+                        children: [
+                          NeuBox(
+                            isPressed: true,
+                            shape: BoxShape.circle,
+                            padding: const EdgeInsets.all(10),
+                            glowColor: AppColors.primary.withAlpha(30),
+                            glowRadius: 6,
+                            child: const Icon(
+                              Icons.visibility_outlined,
+                              color: AppColors.textPrimary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Uji Computer Vision',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    SizedBox(width: 8),
+                                    StatusBadge(label: 'KLASIK / LBPH', type: BadgeType.normal),
+                                  ],
+                                ),
+                                SizedBox(height: 3),
+                                Text(
+                                  'Pipeline non-pretrained: Grayscale → Deteksi Haar → Ekstraksi fitur tekstur LBPH.',
                                   style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                 ),
                               ],

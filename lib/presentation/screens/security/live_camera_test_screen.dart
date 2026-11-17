@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
@@ -5,8 +6,18 @@ import '../../../data/models/face_model.dart';
 import '../../../data/services/home_service.dart';
 import '../../widgets/neu_box.dart';
 
+enum CameraTestMode {
+  ai, // Sistem Cerdas (Deep Learning Pretrained SFace + MiniFASNet)
+  cv, // Computer Vision Klasik (Haar Cascade + Ekstraksi LBPH)
+}
+
 class LiveCameraTestScreen extends StatefulWidget {
-  const LiveCameraTestScreen({super.key});
+  final CameraTestMode initialMode;
+
+  const LiveCameraTestScreen({
+    super.key,
+    this.initialMode = CameraTestMode.ai,
+  });
 
   @override
   State<LiveCameraTestScreen> createState() => _LiveCameraTestScreenState();
@@ -20,10 +31,12 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
   bool _busy = false;
   String? _error;
   AccessAttempt? _result;
+  late CameraTestMode _mode;
 
   @override
   void initState() {
     super.initState();
+    _mode = widget.initialMode;
     _initCamera();
   }
 
@@ -71,7 +84,8 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
     setState(() => _busy = true);
     try {
       final pic = await _cam!.takePicture();
-      final res = await HomeService.testRecognizeRealtime(pic);
+      final modeStr = _mode == CameraTestMode.ai ? 'ai' : 'cv';
+      final res = await HomeService.testRecognizeRealtime(pic, mode: modeStr);
       if (mounted) setState(() => _result = res);
     } catch (e) {
       if (mounted) {
@@ -83,6 +97,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
           isAuthorized: false,
           message: '$e',
           timestamp: DateTime.now(),
+          mode: _mode == CameraTestMode.ai ? 'ai' : 'cv',
         ));
       }
     } finally {
@@ -90,12 +105,89 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
     }
   }
 
+  Widget _buildModeSelector() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      child: NeuBox(
+        isPressed: true,
+        padding: const EdgeInsets.all(4),
+        borderRadius: BorderRadius.circular(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: _modeTabButton(
+                '🧠 Sistem Cerdas',
+                'Deep Learning (AI)',
+                CameraTestMode.ai,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _modeTabButton(
+                '👁️ Computer Vision',
+                'Ekstraksi LBPH',
+                CameraTestMode.cv,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modeTabButton(String title, String subtitle, CameraTestMode mode) {
+    final isSelected = _mode == mode;
+    return GestureDetector(
+      onTap: () {
+        if (_mode != mode) {
+          setState(() {
+            _mode = mode;
+            _result = null;
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+        decoration: isSelected
+            ? BoxDecoration(
+                color: AppColors.neuBase,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: AppColors.neuElevation(distance: 2, blur: 5),
+              )
+            : null,
+        child: Column(
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected ? AppColors.activeBlue : AppColors.textMuted,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.neuBase,
       appBar: AppBar(
-        title: const Text('Verifikasi Wajah'),
+        title: Text(
+          _mode == CameraTestMode.ai ? 'Uji Sistem Cerdas (AI)' : 'Uji Computer Vision (LBPH)',
+        ),
         actions: [
           if (_cameras.length > 1)
             IconButton(icon: const Icon(Icons.flip_camera_ios_outlined), onPressed: _flipCam),
@@ -118,10 +210,13 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
               : SafeArea(
                   child: Column(
                     children: [
-                      // ── Kamera (selalu 30 FPS mulus) ──
+                      // ── Tab Switcher: Sistem Cerdas vs Computer Vision ──
+                      _buildModeSelector(),
+
+                      // ── Kamera Preview (30 FPS) ──
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
                           child: NeuBox(
                             padding: const EdgeInsets.all(4),
                             borderRadius: BorderRadius.circular(20),
@@ -151,10 +246,18 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                                   const SizedBox(width: 18, height: 18,
                                     child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
                                 else
-                                  const Icon(Icons.face_retouching_natural, color: AppColors.primary, size: 22),
+                                  Icon(
+                                    _mode == CameraTestMode.ai
+                                        ? Icons.auto_awesome
+                                        : Icons.visibility,
+                                    color: AppColors.primary,
+                                    size: 22,
+                                  ),
                                 const SizedBox(width: 10),
                                 Text(
-                                  _busy ? 'Memverifikasi...' : 'Verifikasi Wajah',
+                                  _busy
+                                      ? (_mode == CameraTestMode.ai ? 'Menganalisis AI (SFace)...' : 'Mengekstrak Fitur LBPH...')
+                                      : (_mode == CameraTestMode.ai ? 'Verifikasi Sistem Cerdas (AI)' : 'Ekstraksi & Uji CV (LBPH)'),
                                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                                 ),
                               ],
@@ -165,9 +268,11 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
 
                       // ── Hasil Verifikasi ──
                       if (_result != null)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          child: _buildResultCard(_result!),
+                        Flexible(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: _buildResultCard(_result!),
+                          ),
                         ),
                     ],
                   ),
@@ -176,11 +281,12 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
   }
 
   Widget _buildResultCard(AccessAttempt r) {
-    final isSpoof = r.isSpoofAttack;
+    final isCv = _mode == CameraTestMode.cv || r.isCvMode;
+    final isSpoof = isCv ? false : r.isSpoofAttack;
     final granted = r.granted;
     final color = isSpoof ? AppColors.danger : (granted ? AppColors.normal : AppColors.warning);
     final icon = isSpoof ? Icons.block : (granted ? Icons.check_circle : Icons.cancel_outlined);
-    final status = isSpoof ? 'SPOOF' : (granted ? 'DIIZINKAN' : 'DITOLAK');
+    final status = isSpoof ? 'SPOOF (AI)' : (granted ? 'DIIZINKAN' : 'DITOLAK');
 
     return NeuBox(
       padding: const EdgeInsets.all(16),
@@ -194,9 +300,18 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
               Icon(icon, color: color, size: 28),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  r.matchedName ?? 'Tidak Dikenal',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      r.matchedName ?? (isSpoof ? 'Wajah Palsu Terdeteksi' : 'Tidak Dikenal'),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
+                    ),
+                    Text(
+                      isCv ? 'Mode Computer Vision (Non-Pretrained)' : 'Mode Sistem Cerdas (Pretrained)',
+                      style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                    ),
+                  ],
                 ),
               ),
               Container(
@@ -208,13 +323,85 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Metrik singkat
-          _metricRow('Kemiripan', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
-          _metricRow('Liveness', '${(r.livenessScore * 100).toStringAsFixed(0)}% ${isSpoof ? "FAKE" : "REAL"}'),
-          if (r.latencyMs != null) _metricRow('Latency', '${r.latencyMs} ms'),
+          if (isCv) ...[
+            // Metrik khusus Computer Vision (Ekstraksi LBPH)
+            _metricRow('Metode', r.method ?? 'Haar + Ekstraksi LBPH (Non-Pretrained)'),
+            _metricRow('Jarak Chi-Square', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Ambang <= 34.0)' : '-'),
+            _metricRow('Kesesuaian Tekstur', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
+            _metricRow('Representasi Fitur', 'Grid Spasial 8x8 (16384-D LBPH)'),
+            if (r.latencyMs != null) _metricRow('Waktu Ekstraksi', '${r.latencyMs} ms'),
+
+            Container(
+              margin: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.neuBase,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Text(
+                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network. Deteksi ROI, konversi grayscale, ekualisasi histogram, dan pencocokan histogram tekstur LBPH.',
+                style: TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
+              ),
+            ),
+
+            if (r.pipelinePreviews != null && r.pipelinePreviews!.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text(
+                '🖼️ Visualisasi Citra Pipeline CV:',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: r.pipelinePreviews!.map((p) {
+                    final b64 = p['image'] ?? '';
+                    if (b64.isEmpty) return const SizedBox.shrink();
+                    return Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppColors.neuBase,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Image.memory(
+                              base64Decode(b64),
+                              width: 62,
+                              height: 62,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 30),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            p['label'] ?? '',
+                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ] else ...[
+            // Metrik Sistem Cerdas (Deep Learning: SFace + MiniFASNet)
+            _metricRow('Model Pengenal', 'SFace ONNX (128-D L2 Embedding)'),
+            _metricRow('Kemiripan Cosine', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
+            _metricRow('Liveness Anti-Spoof', '${(r.livenessScore * 100).toStringAsFixed(0)}% ${isSpoof ? "FAKE" : "REAL"}'),
+            if (r.latencyMs != null) _metricRow('Latency Inference', '${r.latencyMs} ms'),
+          ],
+
           if (r.message.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 8),
               child: Text(r.message, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
             ),
         ],

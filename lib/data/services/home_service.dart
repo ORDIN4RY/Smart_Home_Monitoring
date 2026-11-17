@@ -230,12 +230,15 @@ class HomeService {
   }
 
   /// POST /api/recognize — khusus untuk pengujian kamera realtime (Web, Mobile, Desktop)
+  /// Mendukung 2 mode pengujian: 'ai' (Sistem Cerdas: YuNet + SFace) dan 'cv' (Computer Vision: Haar + LBPH)
   /// Mengukur latency (ms), menangani status 200, 403 (spoof), 404 (tidak ada wajah) secara mulus
-  static Future<AccessAttempt> testRecognizeRealtime(dynamic fileOrPath) async {
+  static Future<AccessAttempt> testRecognizeRealtime(dynamic fileOrPath, {String mode = 'ai'}) async {
     final stopwatch = Stopwatch()..start();
     try {
       final request = http.MultipartRequest('POST', Uri.parse(ApiConfig.recognizeUrl));
       request.headers.addAll({'Accept': 'application/json'});
+      request.fields['mode'] = mode;
+
       final List<int> bytes = fileOrPath is XFile
           ? await fileOrPath.readAsBytes()
           : (fileOrPath is List<int>
@@ -266,9 +269,10 @@ class HomeService {
             message: body['error']?.toString() ?? 'Wajah tidak terdeteksi',
             timestamp: DateTime.now(),
             latencyMs: latency,
+            mode: mode,
           );
         }
-        return AccessAttempt.fromJson(body, latency: latency);
+        return AccessAttempt.fromJson(body, latency: latency, defaultMode: mode);
       }
       return AccessAttempt(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -279,6 +283,7 @@ class HomeService {
         message: 'Respons tidak valid (${response.statusCode})',
         timestamp: DateTime.now(),
         latencyMs: latency,
+        mode: mode,
       );
     } catch (e) {
       stopwatch.stop();
@@ -288,9 +293,10 @@ class HomeService {
         isLivenessPassed: false,
         livenessScore: 0.0,
         isAuthorized: false,
-        message: 'Koneksi: $e',
+        message: 'Gagal terhubung ke backend: $e. Pastikan server Flask (app.py) aktif.',
         timestamp: DateTime.now(),
         latencyMs: stopwatch.elapsedMilliseconds,
+        mode: mode,
       );
     }
   }

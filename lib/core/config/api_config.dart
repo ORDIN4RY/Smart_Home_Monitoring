@@ -6,7 +6,7 @@ class ApiConfig {
   /// - Jika dijalankan di HP fisik via Wi-Fi LAN: 'http://10.10.4.169:5000'
   static String baseUrl = kIsWeb
       ? 'http://127.0.0.1:5000'
-      : 'http://10.238.25.157:5000';
+      : 'http://192.168.1.5:5000';
 
   /// Toggle: true = pakai Mock Data (dev/demo), false = live ke Flask
   static bool useMockData = false;
