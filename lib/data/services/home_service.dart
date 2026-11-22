@@ -214,7 +214,7 @@ class HomeService {
 
   /// POST /api/recognize — kenali wajah dari foto upload
   /// Kembalikan AccessAttempt dari hasil recognition Flask
-  static Future<AccessAttempt> recognizeFace(String filePath) async {
+  static Future<AccessAttempt> recognizeFace(String filePath, {String mode = 'cv'}) async {
     if (ApiConfig.useMockData) {
       return MockDataGenerator.accessAttempts.first;
     }
@@ -222,6 +222,7 @@ class HomeService {
       ApiConfig.recognizeUrl,
       filePath: filePath,
       fileField: 'photo',
+      fields: {'mode': mode},
     );
     if (response is Map<String, dynamic>) {
       return AccessAttempt.fromJson(response);

@@ -129,6 +129,7 @@ class AccessAttempt {
         if (e is Map) {
           return {
             'label': e['label']?.toString() ?? '',
+            'desc': e['desc']?.toString() ?? '',
             'image': e['image']?.toString() ?? '',
           };
         }

@@ -16,7 +16,7 @@ class LiveCameraTestScreen extends StatefulWidget {
 
   const LiveCameraTestScreen({
     super.key,
-    this.initialMode = CameraTestMode.ai,
+    this.initialMode = CameraTestMode.cv, // Default Mode Computer Vision Klasik (Haar + MCTA + LBPH)
   });
 
   @override
@@ -282,7 +282,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
 
   Widget _buildResultCard(AccessAttempt r) {
     final isCv = _mode == CameraTestMode.cv || r.isCvMode;
-    final isSpoof = isCv ? false : r.isSpoofAttack;
+    final isSpoof = r.isSpoofAttack;
     final granted = r.granted;
     final color = isSpoof ? AppColors.danger : (granted ? AppColors.normal : AppColors.warning);
     final icon = isSpoof ? Icons.block : (granted ? Icons.check_circle : Icons.cancel_outlined);
@@ -326,6 +326,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
           if (isCv) ...[
             // Metrik khusus Computer Vision (Ekstraksi LBPH)
             _metricRow('Metode', r.method ?? 'Haar + Ekstraksi LBPH (Non-Pretrained)'),
+            _metricRow('Keaslian Wajah (Color Texture)', '${(r.livenessScore * 100).toStringAsFixed(1)}% ${r.isSpoofAttack ? "SPOOF / PALSU" : "REAL / ASLI"}'),
             _metricRow('Jarak Chi-Square', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Ambang <= 34.0)' : '-'),
             _metricRow('Kesesuaian Tekstur', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
             _metricRow('Representasi Fitur', 'Grid Spasial 8x8 (16384-D LBPH)'),
@@ -340,54 +341,128 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                 border: Border.all(color: AppColors.border),
               ),
               child: const Text(
-                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network. Deteksi ROI, konversi grayscale, ekualisasi histogram, dan pencocokan histogram tekstur LBPH.',
+                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network. Deteksi ROI, liveness Color Texture Analysis (YCrCb + HSV, Boulkenafet 2016), dan pencocokan histogram LBPH.',
                 style: TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
               ),
             ),
 
             if (r.pipelinePreviews != null && r.pipelinePreviews!.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              const Text(
-                '🖼️ Visualisasi Citra Pipeline CV:',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '🔬 Tahapan Ekstraksi Fitur (Visual):',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                  Text(
+                    '*Ketuk untuk zoom',
+                    style: TextStyle(fontSize: 10, color: AppColors.primary, fontStyle: FontStyle.italic),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: r.pipelinePreviews!.map((p) {
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 195,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: r.pipelinePreviews!.length,
+                  separatorBuilder: (_, index) => const SizedBox(width: 10),
+                  itemBuilder: (ctx, idx) {
+                    final p = r.pipelinePreviews![idx];
                     final b64 = p['image'] ?? '';
+                    final label = p['label'] ?? 'Tahap ';
+                    final desc = p['desc'] ?? '';
                     if (b64.isEmpty) return const SizedBox.shrink();
-                    return Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppColors.neuBase,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: Image.memory(
-                              base64Decode(b64),
-                              width: 62,
-                              height: 62,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 30),
+
+                    return InkWell(
+                      onTap: () => _showZoomImageDialog(context, label, desc, b64),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 150,
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.neuBase,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withAlpha(30),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'Tahap ${idx + 1}',
+                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.primary),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            p['label'] ?? '',
-                            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
-                          ),
-                        ],
+                            const SizedBox(height: 6),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  color: Colors.black12,
+                                  width: double.infinity,
+                                  child: Image.memory(
+                                    base64Decode(b64),
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, _, _) => const Icon(Icons.broken_image, size: 30),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                            ),
+                            if (desc.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                desc,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     );
-                  }).toList(),
+                  },
+                ),
+              ),
+            ],
+            if (r.pipelineStages != null && r.pipelineStages!.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    '📜 Log Alur Sistem Ilmiah (Tahapan)',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  ),
+                  children: r.pipelineStages!.map((s) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('• ', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                        Expanded(
+                          child: Text(s, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                        ),
+                      ],
+                    ),
+                  )).toList(),
                 ),
               ),
             ],
@@ -418,6 +493,67 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
           Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
           Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
         ],
+      ),
+    );
+  }
+
+  void _showZoomImageDialog(BuildContext context, String title, String desc, String b64) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.neuBase,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              if (desc.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(desc, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+              ],
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  color: Colors.black26,
+                  constraints: const BoxConstraints(maxHeight: 280),
+                  width: double.infinity,
+                  child: Image.memory(
+                    base64Decode(b64),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Tutup', style: TextStyle(color: AppColors.primary)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
