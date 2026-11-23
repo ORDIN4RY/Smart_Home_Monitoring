@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
@@ -326,8 +326,15 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
           if (isCv) ...[
             // Metrik khusus Computer Vision (Ekstraksi LBPH)
             _metricRow('Metode', r.method ?? 'Haar + Ekstraksi LBPH (Non-Pretrained)'),
-            _metricRow('Keaslian Wajah (Color Texture)', '${(r.livenessScore * 100).toStringAsFixed(1)}% ${r.isSpoofAttack ? "SPOOF / PALSU" : "REAL / ASLI"}'),
-            _metricRow('Jarak Chi-Square', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Ambang <= 34.0)' : '-'),
+            _metricRow(
+              'Keaslian (CrCb + HS 1024-D 1-NN)',
+              r.distanceChi2Liveness != null && r.distanceChi2Spoof != null
+                  ? 'χ² Real: ${r.distanceChi2Liveness!.toStringAsFixed(3)} vs Spoof: ${r.distanceChi2Spoof!.toStringAsFixed(3)} • ${r.isSpoofAttack ? "SPOOF" : "REAL"}'
+                  : (r.distanceChi2Liveness != null
+                      ? 'χ²: ${r.distanceChi2Liveness!.toStringAsFixed(4)} (Ambang <= ${r.thresholdChi2Liveness?.toStringAsFixed(2) ?? "0.12"}) • ${r.isSpoofAttack ? "SPOOF / PALSU" : "REAL / ASLI"}'
+                      : '${(r.livenessScore * 100).toStringAsFixed(1)}% ${r.isSpoofAttack ? "SPOOF / PALSU" : "REAL / ASLI"}'),
+            ),
+            _metricRow('Jarak Chi-Square (FR)', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Ambang <= 34.0)' : '-'),
             _metricRow('Kesesuaian Tekstur', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
             _metricRow('Representasi Fitur', 'Grid Spasial 8x8 (16384-D LBPH)'),
             if (r.latencyMs != null) _metricRow('Waktu Ekstraksi', '${r.latencyMs} ms'),
@@ -341,7 +348,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                 border: Border.all(color: AppColors.border),
               ),
               child: const Text(
-                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network. Deteksi ROI, liveness Color Texture Analysis (YCrCb + HSV, Boulkenafet 2016), dan pencocokan histogram LBPH.',
+                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network maupun SVM. Evaluasi Chi-Square 2 tahap (Multi-Exemplar 1-NN): Gatekeeper 1 Liveness Komparasi Dual-Prototype Real vs Spoof (CrCb + HS 1024-D) dan Gatekeeper 2 LBPH Identitas (χ² ≤ 34.0).',
                 style: TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
               ),
             ),

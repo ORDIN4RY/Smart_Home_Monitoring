@@ -55,6 +55,9 @@ class AccessAttempt {
   final String mode;             // 'ai' (Sistem Cerdas) atau 'cv' (Computer Vision)
   final String? method;          // e.g. "YuNet + SFace (Deep Learning)" atau "Haar + LBPH (Computer Vision)"
   final double? distance;        // Jarak Chi-Square / Euclidean untuk CV
+  final double? distanceChi2Liveness; // Jarak Chi-Square Gatekeeper 1 Color-LBP 1-NN ke Real
+  final double? distanceChi2Spoof;    // Jarak Chi-Square Gatekeeper 1 Color-LBP 1-NN ke Spoof
+  final double? thresholdChi2Liveness; // Ambang batas Chi-Square Gatekeeper 1 (default 0.08)
   final List<String>? pipelineStages; // Tahapan pipeline Computer Vision klasik
   final List<Map<String, String>>? pipelinePreviews; // Thumbnail base64 tahapan CV (Crop, Gray, LBP)
 
@@ -73,6 +76,9 @@ class AccessAttempt {
     this.mode = 'ai',
     this.method,
     this.distance,
+    this.distanceChi2Liveness,
+    this.distanceChi2Spoof,
+    this.thresholdChi2Liveness,
     this.pipelineStages,
     this.pipelinePreviews,
   });
@@ -116,6 +122,9 @@ class AccessAttempt {
     final parsedMode = json['mode']?.toString() ?? defaultMode;
     final parsedMethod = json['metode'] ?? json['method'];
     final parsedDist = (json['distance'] ?? json['distance_chi2']) as num?;
+    final parsedDistLiveness = (json['distance_chi2_liveness']) as num?;
+    final parsedDistSpoof = (json['distance_chi2_spoof']) as num?;
+    final parsedThreshLiveness = (json['threshold_chi2_liveness']) as num?;
     final stagesRaw = json['tahapan'] ?? json['pipeline_stages'];
     List<String>? stages;
     if (stagesRaw is List) {
@@ -154,6 +163,9 @@ class AccessAttempt {
       mode: parsedMode,
       method: parsedMethod?.toString(),
       distance: parsedDist?.toDouble(),
+      distanceChi2Liveness: parsedDistLiveness?.toDouble(),
+      distanceChi2Spoof: parsedDistSpoof?.toDouble(),
+      thresholdChi2Liveness: parsedThreshLiveness?.toDouble(),
       pipelineStages: stages,
       pipelinePreviews: previews,
     );
@@ -174,6 +186,9 @@ class AccessAttempt {
         'mode': mode,
         'metode': method,
         'distance': distance,
+        'distance_chi2_liveness': distanceChi2Liveness,
+        'distance_chi2_spoof': distanceChi2Spoof,
+        'threshold_chi2_liveness': thresholdChi2Liveness,
         'tahapan': pipelineStages,
       };
 }
