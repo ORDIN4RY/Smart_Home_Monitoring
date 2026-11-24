@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import 'neu_box.dart';
 import 'neu_switch.dart';
-import 'status_badge.dart';
 
 class DeviceSwitchCard extends StatelessWidget {
   final IconData icon;
@@ -78,7 +77,7 @@ class DeviceSwitchCard extends StatelessWidget {
             ],
           ),
           if (isAutoMode != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             NeuBox(
               isPressed: true,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -88,36 +87,27 @@ class DeviceSwitchCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Text(
-                        'Mode Kontrol:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      Icon(
+                        Icons.auto_mode,
+                        size: 16,
+                        color: isAutoMode! ? AppColors.activeBlue : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 8),
-                      StatusBadge(
-                        label: isAutoMode! ? 'Otomatis' : 'Manual',
-                        type: isAutoMode! ? BadgeType.active : BadgeType.warning,
+                      Text(
+                        'Mode Otomatis',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isAutoMode! ? AppColors.textPrimary : AppColors.textSecondary,
+                        ),
                       ),
                     ],
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Auto',
-                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                      ),
-                      const SizedBox(width: 8),
-                      NeuSwitch(
-                        width: 44,
-                        height: 24,
-                        value: isAutoMode!,
-                        onChanged: onAutoModeChanged,
-                      ),
-                    ],
+                  NeuSwitch(
+                    width: 44,
+                    height: 24,
+                    value: isAutoMode!,
+                    onChanged: onAutoModeChanged,
                   ),
                 ],
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/config/api_config.dart';
+import '../../../data/services/server_connection_manager.dart';
 import '../../widgets/neu_box.dart';
 import '../../widgets/neu_switch.dart';
 
@@ -35,6 +36,8 @@ class _DeviceSettingsScreenState extends State<DeviceSettingsScreen> {
     setState(() {
       ApiConfig.useMockData = _useMock;
     });
+
+    ServerConnectionManager.checkConnection();
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

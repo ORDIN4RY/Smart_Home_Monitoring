@@ -1,9 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../screens/main_navigation.dart';
 import 'neu_box.dart';
 
-class AcDialCard extends StatelessWidget {
+class AcDialCard extends StatefulWidget {
   final double currentTemp;
   final double targetTemp;
   final bool isOn;
@@ -26,8 +27,65 @@ class AcDialCard extends StatelessWidget {
   });
 
   @override
+  State<AcDialCard> createState() => _AcDialCardState();
+}
+
+class _AcDialCardState extends State<AcDialCard> {
+  late double _stagedTemp;
+
+  @override
+  void initState() {
+    super.initState();
+    _stagedTemp = widget.targetTemp;
+  }
+
+  @override
+  void didUpdateWidget(covariant AcDialCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.targetTemp != widget.targetTemp) {
+      _stagedTemp = widget.targetTemp;
+    }
+  }
+
+  void _updateTempFromPosition(Offset localPos, Size size) {
+    final center = Offset(size.width / 2, size.height - 10);
+    final dx = localPos.dx - center.dx;
+    final dy = localPos.dy - center.dy;
+
+    // Hitung sudut sentuhan dalam busur setengah lingkaran atas
+    double angle = atan2(dy, dx);
+    if (angle > 0) {
+      angle = dx < 0 ? -pi : 0;
+    }
+
+    // Pemetaan sudut (-pi s/d 0) ke rentang suhu 16°C - 32°C secara linear tanpa area kosong
+    const minTemp = 16.0;
+    const maxTemp = 32.0;
+    final fraction = ((angle + pi) / pi).clamp(0.0, 1.0);
+    final calculatedTemp = (minTemp + fraction * (maxTemp - minTemp)).roundToDouble();
+    final clampedTemp = calculatedTemp.clamp(minTemp, maxTemp);
+
+    if (_stagedTemp != clampedTemp) {
+      setState(() {
+        _stagedTemp = clampedTemp;
+      });
+      widget.onTempChanged?.call(clampedTemp);
+    }
+  }
+
+  void _stepTemp(double delta) {
+    final newTemp = (_stagedTemp + delta).clamp(16.0, 32.0);
+    if (_stagedTemp != newTemp) {
+      setState(() {
+        _stagedTemp = newTemp;
+      });
+      widget.onTempChanged?.call(newTemp);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final pwmValue = (isOn ? (peltierPwm ?? 0) : 0).clamp(0, 100);
+    final pwmValue = (widget.isOn ? (widget.peltierPwm ?? 0) : 0).clamp(0, 100);
 
     return NeuBox(
       padding: const EdgeInsets.all(20),
@@ -40,7 +98,7 @@ class AcDialCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               NeuBox(
-                isPressed: isOn,
+                isPressed: widget.isOn,
                 shape: BoxShape.circle,
                 padding: const EdgeInsets.all(10),
                 child: const Icon(
@@ -76,15 +134,15 @@ class AcDialCard extends StatelessWidget {
               ),
               // Neumorphic On/Off Pill ("On. ⏻" / "Off. ⏻")
               NeuBox(
-                onTap: () => onToggle(!isOn),
-                isPressed: isOn,
+                onTap: () => widget.onToggle(!widget.isOn),
+                isPressed: widget.isOn,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 borderRadius: BorderRadius.circular(20),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      isOn ? 'On. ' : 'Off. ',
+                      widget.isOn ? 'On. ' : 'Off. ',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -94,7 +152,7 @@ class AcDialCard extends StatelessWidget {
                     Icon(
                       Icons.power_settings_new,
                       size: 14,
-                      color: isOn ? AppColors.textPrimary : AppColors.textMuted,
+                      color: widget.isOn ? AppColors.textPrimary : AppColors.textMuted,
                     ),
                   ],
                 ),
@@ -108,8 +166,8 @@ class AcDialCard extends StatelessWidget {
           Row(
             children: [
               GestureDetector(
-                onTap: onAutoModeChanged != null
-                    ? () => onAutoModeChanged!(!isAutoMode)
+                onTap: widget.onAutoModeChanged != null
+                    ? () => widget.onAutoModeChanged!(!widget.isAutoMode)
                     : null,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -118,7 +176,7 @@ class AcDialCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.neuDarkShadow.withAlpha(isAutoMode ? 160 : 100),
+                        color: AppColors.neuDarkShadow.withAlpha(widget.isAutoMode ? 160 : 100),
                         offset: const Offset(1.5, 1.5),
                         blurRadius: 3,
                       ),
@@ -133,17 +191,17 @@ class AcDialCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isAutoMode ? Icons.auto_awesome : Icons.tune,
+                        widget.isAutoMode ? Icons.auto_awesome : Icons.tune,
                         size: 12,
-                        color: isAutoMode ? AppColors.activeBlue : AppColors.textSecondary,
+                        color: widget.isAutoMode ? AppColors.activeBlue : AppColors.textSecondary,
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        isAutoMode ? 'Auto Suhu ON' : 'Manual Mode',
+                        widget.isAutoMode ? 'Auto Suhu ON' : 'Manual Mode',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: isAutoMode ? AppColors.textPrimary : AppColors.textSecondary,
+                          color: widget.isAutoMode ? AppColors.textPrimary : AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -152,7 +210,7 @@ class AcDialCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                'Suhu Ruang: ${currentTemp.toStringAsFixed(1)}°C',
+                'Suhu Ruang: ${widget.currentTemp.toStringAsFixed(1)}°C',
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -164,75 +222,92 @@ class AcDialCard extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          // Semi-circular Dial Gauge with Radial Ticks & Pointer
+          // Semi-circular Dial Gauge with Interactive Drag Gesture
           Center(
             child: SizedBox(
               width: 250,
               height: 155,
-              child: CustomPaint(
-                painter: _SemiCircleGaugePainter(
-                  value: targetTemp,
-                  minValue: 10,
-                  maxValue: 40,
-                ),
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${targetTemp.toStringAsFixed(0)}°C',
-                        style: const TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                          letterSpacing: -1,
-                          height: 1.0,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final size = Size(constraints.maxWidth, constraints.maxHeight);
+                  return Listener(
+                    onPointerDown: (e) {
+                      MainNavigation.setSwipeEnabled(false);
+                      _updateTempFromPosition(e.localPosition, size);
+                    },
+                    onPointerMove: (e) {
+                      _updateTempFromPosition(e.localPosition, size);
+                    },
+                    onPointerUp: (_) {
+                      MainNavigation.setSwipeEnabled(true);
+                    },
+                    onPointerCancel: (_) {
+                      MainNavigation.setSwipeEnabled(true);
+                    },
+                    behavior: HitTestBehavior.opaque,
+                    child: CustomPaint(
+                      painter: _SemiCircleGaugePainter(
+                        value: _stagedTemp,
+                        minValue: 16,
+                        maxValue: 32,
+                      ),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${_stagedTemp.toStringAsFixed(0)}°C',
+                              style: const TextStyle(
+                                fontSize: 34,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                                letterSpacing: -1,
+                                height: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Target Suhu',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Target Suhu',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
 
           // Quick Temperature Steppers / Adjustment
-          if (onTempChanged != null) ...[
-            const SizedBox(height: 6),
+          if (widget.onTempChanged != null) ...[
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 NeuBox(
-                  onTap: () {
-                    if (targetTemp > 16) onTempChanged!(targetTemp - 1);
-                  },
+                  onTap: () => _stepTemp(-1),
                   shape: BoxShape.circle,
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(9),
                   child: const Icon(Icons.remove, size: 16, color: AppColors.textPrimary),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 18),
                 Text(
-                  'Set Target: ${targetTemp.toStringAsFixed(0)}°C',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                  'Set Target: ${_stagedTemp.toStringAsFixed(0)}°C',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 18),
                 NeuBox(
-                  onTap: () {
-                    if (targetTemp < 32) onTempChanged!(targetTemp + 1);
-                  },
+                  onTap: () => _stepTemp(1),
                   shape: BoxShape.circle,
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(9),
                   child: const Icon(Icons.add, size: 16, color: AppColors.textPrimary),
                 ),
               ],
@@ -257,7 +332,7 @@ class AcDialCard extends StatelessWidget {
                         Icon(
                           Icons.bolt,
                           size: 15,
-                          color: isOn ? AppColors.activeBlue : AppColors.textMuted,
+                          color: widget.isOn ? AppColors.activeBlue : AppColors.textMuted,
                         ),
                         const SizedBox(width: 6),
                         const Text(
@@ -271,11 +346,11 @@ class AcDialCard extends StatelessWidget {
                       ],
                     ),
                     Text(
-                      isOn ? '$pwmValue%' : 'OFF (0%)',
+                      widget.isOn ? '$pwmValue%' : 'OFF (0%)',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: isOn ? AppColors.textPrimary : AppColors.textMuted,
+                        color: widget.isOn ? AppColors.textPrimary : AppColors.textMuted,
                       ),
                     ),
                   ],
@@ -291,18 +366,18 @@ class AcDialCard extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Container(
                         width: MediaQuery.of(context).size.width * (pwmValue / 100),
-                        color: isOn ? const Color(0xFF242C38) : Colors.transparent,
+                        color: widget.isOn ? const Color(0xFF242C38) : Colors.transparent,
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isOn
-                      ? (isAutoMode
-                          ? 'Otomatis menyesuaikan duty cycle PWM sesuai suhu yang diinginkan.'
-                          : 'Peltier beroperasi pada daya manual modul MOSFET.')
-                      : 'Peltier mati. Tidak ada arus PWM yang dialirkan MOSFET.',
+                  widget.isOn
+                      ? (widget.isAutoMode
+                          ? 'Otomatis menyesuaikan duty cycle PWM sesuai suhu.'
+                          : 'Peltier beroperasi pada daya manual.')
+                      : 'Peltier mati.',
                   style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                 ),
               ],

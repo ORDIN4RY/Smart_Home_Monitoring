@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
 import '../../core/config/api_config.dart';
+import 'server_connection_manager.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -38,8 +39,10 @@ class ApiClient {
           .timeout(ApiConfig.timeout);
       return _processResponse(response);
     } on http.ClientException catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Kesalahan koneksi HTTP: ${e.message}');
     } catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Tidak dapat terhubung ke server backend Flask: $e');
     }
   }
@@ -53,8 +56,10 @@ class ApiClient {
           .timeout(ApiConfig.timeout);
       return _processResponse(response);
     } on http.ClientException catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Kesalahan koneksi HTTP: ${e.message}');
     } catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Tidak dapat terhubung ke server backend Flask: $e');
     }
   }
@@ -83,8 +88,10 @@ class ApiClient {
       final response = await http.Response.fromStream(streamed);
       return _processResponse(response);
     } on http.ClientException catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Kesalahan koneksi HTTP: ${e.message}');
     } catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Tidak dapat terhubung ke server backend Flask: $e');
     }
   }
@@ -98,8 +105,10 @@ class ApiClient {
           .timeout(ApiConfig.timeout);
       return _processResponse(response);
     } on http.ClientException catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Kesalahan koneksi HTTP: ${e.message}');
     } catch (e) {
+      ServerConnectionManager.setConnected(false);
       throw ApiException('Tidak dapat terhubung ke server backend Flask: $e');
     }
   }
@@ -115,7 +124,10 @@ class ApiClient {
       body = response.body;
     }
 
-    if (statusCode >= 200 && statusCode < 300) return body;
+    if (statusCode >= 200 && statusCode < 300) {
+      ServerConnectionManager.setConnected(true);
+      return body;
+    }
 
     if (statusCode == 401) {
       throw ApiException('Sesi kedaluwarsa atau belum login.', 401);

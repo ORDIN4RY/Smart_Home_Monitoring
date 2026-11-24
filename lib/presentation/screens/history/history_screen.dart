@@ -62,51 +62,51 @@ class _HistoryScreenState extends State<HistoryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Histori & Aktivitas'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-            child: NeuBox(
-              isPressed: true,
-              padding: const EdgeInsets.all(4),
-              borderRadius: BorderRadius.circular(16),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: AppColors.neuBase,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: AppColors.neuElevation(distance: 2, blur: 5),
-                ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                labelColor: AppColors.primary,
-                unselectedLabelColor: AppColors.textSecondary,
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                tabs: const [
-                  Tab(text: 'Event Keamanan'),
-                  Tab(text: 'Log Sensor'),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadHistoryData,
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildEventList(),
-                _buildSensorHistoryList(),
-              ],
+          : RefreshIndicator(
+              onRefresh: _loadHistoryData,
+              color: AppColors.primary,
+              backgroundColor: AppColors.neuBase,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    child: NeuBox(
+                      isPressed: true,
+                      padding: const EdgeInsets.all(4),
+                      borderRadius: BorderRadius.circular(16),
+                      child: TabBar(
+                        controller: _tabController,
+                        indicator: BoxDecoration(
+                          color: AppColors.neuBase,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: AppColors.neuElevation(distance: 2, blur: 5),
+                        ),
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        dividerColor: Colors.transparent,
+                        labelColor: AppColors.primary,
+                        unselectedLabelColor: AppColors.textSecondary,
+                        labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        tabs: const [
+                          Tab(text: 'Event Keamanan'),
+                          Tab(text: 'Log Sensor'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildEventList(),
+                        _buildSensorHistoryList(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }

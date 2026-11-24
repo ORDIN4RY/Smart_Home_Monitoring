@@ -495,29 +495,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
         );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Keamanan & Akses Pintu'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.videocam_outlined),
-            tooltip: 'Uji Kamera Real-Time',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const LiveCameraTestScreen()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.face_retouching_natural),
-            tooltip: 'Kenali Wajah',
-            onPressed: _showRecognizeDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
-        ],
-      ),
+      backgroundColor: Colors.transparent,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
@@ -526,22 +504,21 @@ class _SecurityScreenState extends State<SecurityScreen> {
               backgroundColor: AppColors.neuBase,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (recentSpoof != null)
                       const HazardBanner(
-                        title: '🚨 PERINGATAN: WAJAH PALSU TERDETEKSI!',
-                        message:
-                            'Terdeteksi upaya pembobolan pintu menggunakan foto/layar digital. Pintu otomatis tetap terkunci aman demi keselamatan rumah Anda.',
+                        title: 'Wajah Palsu Terdeteksi',
+                        message: 'Upaya pembobolan digagalkan. Pintu tetap aman terkunci.',
                         icon: Icons.shield_outlined,
                         isDanger: true,
                       ),
 
                     // Neumorphic Security Shield Plate
                     NeuBox(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                       borderRadius: BorderRadius.circular(22),
                       child: Row(
                         children: [
@@ -555,40 +532,34 @@ class _SecurityScreenState extends State<SecurityScreen> {
                           ),
                           const SizedBox(width: 14),
                           const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Proteksi Pintu Pintar',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary,
-                                        letterSpacing: -0.2,
-                                      ),
+                                Expanded(
+                                  child: Text(
+                                    'Proteksi Pintu',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                      letterSpacing: -0.2,
                                     ),
-                                    SizedBox(width: 8),
-                                    StatusBadge(label: 'Terlindungi', type: BadgeType.normal),
-                                  ],
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Pintu hanya akan terbuka untuk wajah orang asli yang sudah terdaftar. Foto atau layar akan langsung ditolak.',
-                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                ),
+                                SizedBox(width: 8),
+                                StatusBadge(label: 'Aktif', type: BadgeType.normal),
                               ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 18),
 
-                    // ── 2 Fitur Uji Kamera: Sistem Cerdas vs Computer Vision ──
+                    // ── 2 Fitur Uji Kamera ──
                     const Text(
-                      'Fitur Pengujian Kamera',
+                      'Pengujian Kamera',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -596,9 +567,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
                         letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
-                    // Fitur 1: Sistem Cerdas (AI / SFace Pretrained)
+                    // Fitur 1: Sistem Cerdas (AI)
                     NeuBox(
                       onTap: () {
                         Navigator.of(context).push(
@@ -609,8 +580,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       },
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       borderRadius: BorderRadius.circular(20),
-                      glowColor: AppColors.activeBlue.withAlpha(50),
-                      glowRadius: 10,
+                      glowColor: AppColors.activeBlue.withAlpha(40),
+                      glowRadius: 8,
                       child: Row(
                         children: [
                           NeuBox(
@@ -627,29 +598,14 @@ class _SecurityScreenState extends State<SecurityScreen> {
                           ),
                           const SizedBox(width: 14),
                           const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Uji Sistem Cerdas (AI)',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    StatusBadge(label: 'PRETRAINED', type: BadgeType.active),
-                                  ],
-                                ),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Model Deep Learning: Deteksi YuNet + SFace (128-D) + MiniFASNet anti-spoofing.',
-                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                ),
-                              ],
+                            child: Text(
+                              'Uji Kamera AI',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
@@ -658,7 +614,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Fitur 2: Computer Vision Klasik (LBPH Non-Pretrained)
+                    // Fitur 2: Computer Vision (LBPH)
                     NeuBox(
                       onTap: () {
                         Navigator.of(context).push(
@@ -669,7 +625,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       },
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       borderRadius: BorderRadius.circular(20),
-                      glowColor: AppColors.primary.withAlpha(40),
+                      glowColor: AppColors.primary.withAlpha(30),
                       glowRadius: 8,
                       child: Row(
                         children: [
@@ -687,32 +643,54 @@ class _SecurityScreenState extends State<SecurityScreen> {
                           ),
                           const SizedBox(width: 14),
                           const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'Uji Computer Vision',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    StatusBadge(label: 'KLASIK / LBPH', type: BadgeType.normal),
-                                  ],
-                                ),
-                                SizedBox(height: 3),
-                                Text(
-                                  'Pipeline non-pretrained: Grayscale → Deteksi Haar → Ekstraksi fitur tekstur LBPH.',
-                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                                ),
-                              ],
+                            child: Text(
+                              'Uji Kamera Standar (LBPH)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Fitur 3: Kenali Wajah dari Foto
+                    NeuBox(
+                      onTap: _showRecognizeDialog,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      borderRadius: BorderRadius.circular(20),
+                      glowColor: AppColors.primary.withAlpha(30),
+                      glowRadius: 6,
+                      child: const Row(
+                        children: [
+                          NeuBox(
+                            isPressed: true,
+                            shape: BoxShape.circle,
+                            padding: EdgeInsets.all(10),
+                            child: Icon(
+                              Icons.face_retouching_natural,
+                              color: AppColors.textPrimary,
+                              size: 22,
+                            ),
+                          ),
+                          SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              'Kenali Wajah (Unggah / Foto)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Icon(Icons.arrow_forward_ios, size: 14, color: AppColors.textSecondary),
                         ],
                       ),
                     ),
@@ -735,7 +713,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                               ),
                             ),
                             Text(
-                              '${_faces.length} orang memiliki izin akses',
+                              '${_faces.length} terdaftar',
                               style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                             ),
                           ],
@@ -770,13 +748,12 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     if (_faces.isEmpty)
                       NeuBox(
                         isPressed: true,
-                        padding: const EdgeInsets.all(24),
+                        padding: const EdgeInsets.all(20),
                         borderRadius: BorderRadius.circular(18),
                         child: const Center(
                           child: Text(
-                            'Belum ada wajah terdaftar. Tekan "Daftar Wajah" untuk menambahkan.',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                            textAlign: TextAlign.center,
+                            'Belum ada wajah terdaftar',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                           ),
                         ),
                       )
@@ -811,7 +788,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                               ),
                               subtitle: Text(
-                                '${f.role} • Terdaftar ${AppFormatters.relativeTime(f.registeredAt)}',
+                                f.role,
                                 style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                               ),
                               trailing: IconButton(
@@ -824,9 +801,9 @@ class _SecurityScreenState extends State<SecurityScreen> {
                       ),
                     const SizedBox(height: 24),
 
-                    // Section: Riwayat Akses Pintu
+                    // Section: Riwayat Akses
                     const Text(
-                      'Riwayat Akses Pintu Masuk',
+                      'Riwayat Akses',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -851,7 +828,6 @@ class _SecurityScreenState extends State<SecurityScreen> {
                           glowColor: isAttack ? AppColors.danger.withAlpha(40) : null,
                           glowRadius: isAttack ? 10 : 0,
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               NeuBox(
                                 isPressed: true,
@@ -873,14 +849,18 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(
-                                          att.matchedName ?? 'Orang Tidak Dikenal',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: isAttack ? AppColors.danger : AppColors.textPrimary,
+                                        Expanded(
+                                          child: Text(
+                                            att.matchedName ?? 'Tidak Dikenal',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: isAttack ? AppColors.danger : AppColors.textPrimary,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
+                                        const SizedBox(width: 8),
                                         StatusBadge(
                                           label: isAttack ? 'DITOLAK' : 'DIIZINKAN',
                                           type: isAttack ? BadgeType.danger : BadgeType.normal,
@@ -889,15 +869,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      isAttack
-                                          ? 'Upaya akses dengan foto/layar HP digagalkan.'
-                                          : 'Wajah asli terverifikasi. Pintu terbuka.',
-                                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
                                       AppFormatters.formatTimestamp(att.timestamp),
-                                      style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                                     ),
                                   ],
                                 ),

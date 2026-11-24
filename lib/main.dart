@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/constants/app_colors.dart';
-import 'presentation/screens/main_navigation.dart';
+import 'data/services/server_connection_manager.dart';
+import 'data/services/sync_manager.dart';
+import 'presentation/screens/splash/splash_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  ServerConnectionManager.initialize();
+  await SyncManager.initialize();
 
   // Lock to portrait orientation
   SystemChrome.setPreferredOrientations([
@@ -33,7 +37,7 @@ class SmartHomeApp extends StatelessWidget {
       title: 'Smart Home Monitoring',
       debugShowCheckedModeBanner: false,
       theme: AppColors.themeData,
-      home: const MainNavigation(),
+      home: const SplashScreen(),
     );
   }
 }

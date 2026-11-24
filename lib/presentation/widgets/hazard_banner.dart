@@ -7,6 +7,7 @@ class HazardBanner extends StatelessWidget {
   final String message;
   final IconData icon;
   final bool isDanger;
+  final EdgeInsetsGeometry? margin;
 
   const HazardBanner({
     super.key,
@@ -14,6 +15,7 @@ class HazardBanner extends StatelessWidget {
     required this.message,
     this.icon = Icons.warning_amber_rounded,
     this.isDanger = true,
+    this.margin,
   });
 
   @override
@@ -21,8 +23,8 @@ class HazardBanner extends StatelessWidget {
     final color = isDanger ? AppColors.danger : AppColors.warning;
 
     return NeuBox(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
+      margin: margin ?? const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       borderRadius: BorderRadius.circular(20),
       glowColor: color.withAlpha(50),
       glowRadius: 14,

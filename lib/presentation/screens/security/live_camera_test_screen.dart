@@ -325,30 +325,16 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
 
           if (isCv) ...[
             // Metrik khusus Computer Vision (Ekstraksi LBPH)
-            _metricRow('Metode', r.method ?? 'Haar + Ekstraksi LBPH (Non-Pretrained)'),
-            _metricRow('Jarak Chi-Square', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Ambang <= 34.0)' : '-'),
-            _metricRow('Kesesuaian Tekstur', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
-            _metricRow('Representasi Fitur', 'Grid Spasial 8x8 (16384-D LBPH)'),
-            if (r.latencyMs != null) _metricRow('Waktu Ekstraksi', '${r.latencyMs} ms'),
-
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.neuBase,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: const Text(
-                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network. Deteksi ROI, konversi grayscale, ekualisasi histogram, dan pencocokan histogram tekstur LBPH.',
-                style: TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
-              ),
-            ),
+            _metricRow('Metode', 'Haar + LBPH (Non-Pretrained)'),
+            _metricRow('Jarak Chi-Square', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Maks 34.0)' : '-'),
+            _metricRow('Kesesuaian', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
+            _metricRow('Fitur', 'Grid 8x8 (LBPH)'),
+            if (r.latencyMs != null) _metricRow('Waktu', '${r.latencyMs} ms'),
 
             if (r.pipelinePreviews != null && r.pipelinePreviews!.isNotEmpty) ...[
               const SizedBox(height: 10),
               const Text(
-                '🖼️ Visualisasi Citra Pipeline CV:',
+                'Visualisasi Citra Pipeline:',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
               ),
               const SizedBox(height: 6),
@@ -376,7 +362,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                               width: 62,
                               height: 62,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 30),
+                              errorBuilder: (context, anim, secAnim) => const Icon(Icons.broken_image, size: 30),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -393,10 +379,10 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
             ],
           ] else ...[
             // Metrik Sistem Cerdas (Deep Learning: SFace + MiniFASNet)
-            _metricRow('Model Pengenal', 'SFace ONNX (128-D L2 Embedding)'),
+            _metricRow('Model Pengenal', 'SFace ONNX (128-D)'),
             _metricRow('Kemiripan Cosine', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
             _metricRow('Liveness Anti-Spoof', '${(r.livenessScore * 100).toStringAsFixed(0)}% ${isSpoof ? "FAKE" : "REAL"}'),
-            if (r.latencyMs != null) _metricRow('Latency Inference', '${r.latencyMs} ms'),
+            if (r.latencyMs != null) _metricRow('Latency', '${r.latencyMs} ms'),
           ],
 
           if (r.message.isNotEmpty)
@@ -411,12 +397,19 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
 
   Widget _metricRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

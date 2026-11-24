@@ -5,13 +5,13 @@ import '../../../data/models/sensor_reading.dart';
 import '../../../data/models/device_status.dart';
 import '../../../data/models/face_model.dart';
 import '../../../data/services/home_service.dart';
+import '../../../data/services/sync_manager.dart';
 import '../../widgets/neu_box.dart';
 import '../../widgets/ac_dial_card.dart';
 import '../../widgets/device_pill_tile.dart';
 import '../../widgets/scene_card.dart';
-import '../../widgets/hazard_banner.dart';
-import '../security/security_screen.dart';
-import '../control/device_control_screen.dart';
+import '../../../data/services/alert_manager.dart';
+import '../main_navigation.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,69 +21,161 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  Timer? _pollingTimer;
   SensorReading? _sensors;
   DeviceStatus? _devices;
-  List<AccessAttempt> _accessAttempts = [];
-  bool _isLoading = true;
+  List<AccessAttempt> _lastAttempts = [];
+  bool _isLoading = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    _pollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (mounted) _loadData(silent: true);
-    });
+    _sensors = SyncManager.currentSensors.value;
+    _devices = SyncManager.currentDeviceStatus.value;
+
+    SyncManager.currentSensors.addListener(_onSensorsChanged);
+    SyncManager.currentDeviceStatus.addListener(_onDevicesChanged);
+
+    _loadAccessAttempts();
   }
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    SyncManager.currentSensors.removeListener(_onSensorsChanged);
+    SyncManager.currentDeviceStatus.removeListener(_onDevicesChanged);
     super.dispose();
+  }
+
+  void _onSensorsChanged() {
+    if (!mounted) return;
+    setState(() {
+      _sensors = SyncManager.currentSensors.value;
+    });
+    _syncAlerts(_sensors, _lastAttempts);
+  }
+
+  void _onDevicesChanged() {
+    if (!mounted) return;
+    setState(() {
+      _devices = SyncManager.currentDeviceStatus.value;
+    });
+  }
+
+  Future<void> _loadAccessAttempts() async {
+    try {
+      final a = await HomeService.fetchAccessAttempts();
+      if (mounted) {
+        _lastAttempts = a;
+        _syncAlerts(_sensors, a);
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadData({bool silent = false}) async {
     if (!silent) {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
+      setState(() => _isLoading = true);
     }
+    await SyncManager.syncAll(silent: silent);
+    await _loadAccessAttempts();
+    if (mounted && !silent) {
+      setState(() => _isLoading = false);
+    }
+  }
 
-    try {
-      final s = await HomeService.fetchCurrentSensors();
-      final d = await HomeService.fetchDeviceStatus();
-      final a = await HomeService.fetchAccessAttempts();
-      if (mounted) {
-        setState(() {
-          _sensors = s;
-          _devices = d;
-          _accessAttempts = a;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
-      }
+  void _syncAlerts(SensorReading? sensors, List<AccessAttempt> attempts) {
+    if (sensors == null) return;
+
+    // Periksa apakah ada serangan spoofing yang terjadi sangat baru (< 60 detik lalu)
+    final recentSpoof = attempts.cast<AccessAttempt?>().firstWhere(
+          (a) =>
+              a != null &&
+              a.isSpoofAttack &&
+              DateTime.now().difference(a.timestamp).inSeconds.abs() < 60,
+          orElse: () => null,
+        );
+
+    if (sensors.flameDetected && !AlertManager.isDismissed('flame')) {
+      AlertManager.show(DynamicAlert(
+        id: 'flame',
+        title: 'Api Terdeteksi!',
+        message: 'Sensor flame membaca nyala api. Buzzer aktif.',
+        icon: Icons.local_fire_department,
+        priority: AlertPriority.danger,
+        onTap: () => MainNavigation.switchTo(context, 0),
+      ));
+    } else if (sensors.isGasDanger && !AlertManager.isDismissed('gas')) {
+      AlertManager.show(DynamicAlert(
+        id: 'gas',
+        title: 'Kebocoran Gas Berbahaya!',
+        message: 'Kadar gas mencapai ${sensors.gasPpm.toStringAsFixed(0)} PPM.',
+        icon: Icons.gas_meter,
+        priority: AlertPriority.danger,
+        onTap: () => MainNavigation.switchTo(context, 0),
+      ));
+    } else if (recentSpoof != null &&
+        !AlertManager.isDismissed('spoof_${recentSpoof.id}')) {
+      AlertManager.show(DynamicAlert(
+        id: 'spoof_${recentSpoof.id}',
+        title: 'Wajah Palsu Ditolak',
+        message: 'Upaya pembobolan pintu teras digagalkan.',
+        icon: Icons.no_photography,
+        priority: AlertPriority.danger,
+        onTap: () => MainNavigation.switchTo(context, 2),
+      ));
+    } else if (sensors.motionDetected && !AlertManager.isDismissed('motion')) {
+      AlertManager.show(DynamicAlert(
+        id: 'motion',
+        title: 'Gerakan di Teras',
+        message: 'Kamera teras aktif memantau.',
+        icon: Icons.videocam,
+        priority: AlertPriority.info,
+        onTap: () => MainNavigation.switchTo(context, 2),
+      ));
+    } else if (sensors.rainDetected && !AlertManager.isDismissed('rain')) {
+      AlertManager.show(DynamicAlert(
+        id: 'rain',
+        title: 'Hujan Terdeteksi',
+        message: 'Kanopi atap telah ditutup otomatis.',
+        icon: Icons.water_drop,
+        priority: AlertPriority.warning,
+        onTap: () => MainNavigation.switchTo(context, 1),
+      ));
+    } else if (sensors.isGasWarning && !AlertManager.isDismissed('gas_warn')) {
+      AlertManager.show(DynamicAlert(
+        id: 'gas_warn',
+        title: 'Kadar Gas Meningkat',
+        message: 'Kadar gas MQ-2: ${sensors.gasPpm.toStringAsFixed(0)} PPM.',
+        icon: Icons.info_outline,
+        priority: AlertPriority.warning,
+        onTap: () => MainNavigation.switchTo(context, 0),
+      ));
     }
   }
 
   Future<void> _quickToggle(String key, dynamic val) async {
-    final updated = await HomeService.controlDevice(key, val);
-    if (mounted) {
-      setState(() => _devices = updated);
-    }
+    await SyncManager.updateDeviceSetting(key, val);
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _sensors == null) {
       return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+
+    if (_sensors == null && _error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off, size: 36, color: AppColors.danger),
+              const SizedBox(height: 10),
+              Text('Koneksi: $_error', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
+      );
     }
 
     final sensors = _sensors ??
@@ -100,165 +192,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final devices = _devices ?? DeviceStatus(lastUpdated: DateTime.now());
 
-    final recentSpoof = _accessAttempts.cast<AccessAttempt?>().firstWhere(
-          (a) => a != null && a.isSpoofAttack,
-          orElse: () => null,
-        );
-
     return RefreshIndicator(
       onRefresh: () => _loadData(),
       color: AppColors.primary,
       backgroundColor: AppColors.neuBase,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Header: Profile Pill + Avatar (Matching Reference Top-Right)
-            Row(
-              children: [
-                // Circular Avatar in recessed NeuBox exactly like image
-                NeuBox(
-                  isPressed: true,
-                  shape: BoxShape.circle,
-                  padding: const EdgeInsets.all(5),
-                  child: Container(
-                    width: 38,
-                    height: 38,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF242C38),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.person, color: Color(0xFFE2E7EE), size: 22),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-
-                // Pill Card: "Hi, Administrator / Kondisi Rumah Aman" + Options ⋮
-                Expanded(
-                  child: NeuBox(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    borderRadius: BorderRadius.circular(24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hi, Administrator',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                                letterSpacing: -0.2,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Smart Home Active',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                        PopupMenuButton<int>(
-                          icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textSecondary),
-                          color: AppColors.neuBase,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(value: 1, child: Text('Refresh Sensor')),
-                            const PopupMenuItem(value: 2, child: Text('Pengaturan')),
-                          ],
-                          onSelected: (val) {
-                            if (val == 1) _loadData();
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Emergency Hazard Alert Banner (Gas / Flame / Spoof / Rain / Camera Motion)
-            if (recentSpoof != null)
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SecurityScreen()),
-                  );
-                },
-                child: const HazardBanner(
-                  title: '🚨 PERINGATAN: WAJAH PALSU DITOLAK!',
-                  message: 'Upaya pembobolan pintu menggunakan foto/layar HP telah digagalkan.',
-                  icon: Icons.no_photography,
-                  isDanger: true,
-                ),
-              ),
-
-            if (sensors.flameDetected)
-              const HazardBanner(
-                title: '🔥 PERINGATAN: API TERDETEKSI! (BUZZER AKTIF)',
-                message: 'Sensor flame mendeteksi nyala api. Alarm Buzzer otomatis berbunyi nyaring!',
-                icon: Icons.local_fire_department,
-                isDanger: true,
-              ),
-
-            if (sensors.isGasDanger)
-              HazardBanner(
-                title: '⚠️ KEBOCORAN GAS BERBAHAYA! (BUZZER AKTIF)',
-                message: 'Kadar gas MQ-2 mencapai ${sensors.gasPpm.toStringAsFixed(0)} PPM (> 400). Alarm Buzzer otomatis berbunyi nyaring!',
-                icon: Icons.gas_meter,
-                isDanger: true,
-              )
-            else if (sensors.isGasWarning)
-              HazardBanner(
-                title: 'Kadar Gas Meningkat',
-                message: 'Kadar gas MQ-2: ${sensors.gasPpm.toStringAsFixed(0)} PPM (Waspada).',
-                icon: Icons.info_outline,
-                isDanger: false,
-              ),
-
-            // Live Camera Active notification on PIR Motion
-            if (sensors.motionDetected)
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SecurityScreen()),
-                  );
-                },
-                child: const HazardBanner(
-                  title: '📹 KAMERA TERAS AKTIF: GERAKAN TERDETEKSI!',
-                  message: 'Sensor PIR mendeteksi pergerakan di teras. Kamera otomatis aktif memantau & menyalakan lampu.',
-                  icon: Icons.videocam,
-                  isDanger: false,
-                ),
-              ),
-
-            // Rain sensor notification
-            if (sensors.rainDetected)
-              HazardBanner(
-                title: '🌧️ HUJAN TERDETEKSI: ATAP OTOMATIS MENUTUP',
-                message: devices.roofAutoMode
-                    ? 'Sensor hujan aktif. Kanopi atap telah ditutup otomatis demi keamanan.'
-                    : 'Sensor hujan aktif. Mode atap saat ini manual (${devices.roofOpen ? "Masih Terbuka" : "Tertutup"}).',
-                icon: Icons.water_drop,
-                isDanger: false,
-              ),
-
-            if (_error != null)
-              NeuBox(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(12),
-                child: Text('Koneksi: $_error', style: const TextStyle(fontSize: 11, color: AppColors.danger)),
-              ),
 
             // 1. Featured Peltier Cooling with MOSFET PWM Dial Card
             AcDialCard(
@@ -306,9 +249,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Bottom Horizontal Scene Strip (Matching Reference Bottom-Left Strip)
             NeuBox(
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const DeviceControlScreen()),
-                );
+                MainNavigation.switchTo(context, 1);
               },
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               borderRadius: BorderRadius.circular(22),
@@ -395,9 +336,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       NeuBox(
                         onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const SecurityScreen()),
-                          );
+                          MainNavigation.switchTo(context, 2);
                         },
                         shape: BoxShape.circle,
                         padding: const EdgeInsets.all(8),
@@ -433,9 +372,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ? '🟢 AKTIF • PIR Mendeteksi Gerakan'
                         : '⚪ Standby • Area Teras Sepi',
                     onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SecurityScreen()),
-                      );
+                      MainNavigation.switchTo(context, 2);
                     },
                     trailing: Icon(
                       Icons.circle,
