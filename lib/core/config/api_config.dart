@@ -2,10 +2,24 @@ class ApiConfig {
   /// Base URL Flask Backend:
   /// - Jika dijalankan di Web / Browser laptop: 'http://127.0.0.1:5000'
   /// - Jika dijalankan di HP fisik via Wi-Fi LAN: 'http://10.10.4.169:5000'
-  static String baseUrl = 'http://157.66.34.38:8000';
+  static String baseUrl = 'http://157.66.34.38:8080';
 
-  /// Toggle: true = pakai Mock Data (dev/demo), false = live ke Flask
+  /// Toggle: true = pakai Mock Data (dev/demo), false = live ke Backend
   static bool useMockData = false;
+
+  /// WebSocket URL untuk MQTT melalui port yang sama dengan HTTP API (/mqtt)
+  static String get mqttWsUrl {
+    final uri = Uri.parse(baseUrl);
+    final wsScheme = uri.scheme == 'https' ? 'wss' : 'ws';
+    final portPart = uri.hasPort ? ':${uri.port}' : '';
+    return '$wsScheme://${uri.host}$portPart/mqtt';
+  }
+
+  static int get mqttWsPort {
+    final uri = Uri.parse(baseUrl);
+    if (uri.hasPort) return uri.port;
+    return uri.scheme == 'https' ? 443 : 80;
+  }
 
   /// Connection timeout
   static const Duration timeout = Duration(seconds: 10);

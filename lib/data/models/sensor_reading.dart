@@ -1,45 +1,70 @@
 class SensorReading {
-  final double temperature;
-  final double humidity;
-  final double lightIntensity;
-  final double gasPpm;
-  final bool flameDetected;
-  final bool motionDetected;
-  final bool rainDetected;
-  final bool doorOpen;
+  final double? temperature;
+  final double? humidity;
+  final double? lightIntensity;
+  final double? gasPpm;
+  final bool? flameDetected;
+  final bool? motionDetected;
+  final bool? rainDetected;
+  final bool? doorOpen;
   final DateTime timestamp;
 
   const SensorReading({
-    required this.temperature,
-    required this.humidity,
-    required this.lightIntensity,
-    required this.gasPpm,
-    required this.flameDetected,
-    required this.motionDetected,
-    this.rainDetected = false,
-    required this.doorOpen,
+    this.temperature,
+    this.humidity,
+    this.lightIntensity,
+    this.gasPpm,
+    this.flameDetected,
+    this.motionDetected,
+    this.rainDetected,
+    this.doorOpen,
     required this.timestamp,
   });
 
-  bool get isGasDanger => gasPpm >= 400;
-  bool get isGasWarning => gasPpm >= 200 && gasPpm < 400;
-  bool get isTempHigh => temperature >= 32;
-  bool get isDark => lightIntensity < 30.0;
-  bool get isRaining => rainDetected;
-  bool get isPorchCameraActive => motionDetected;
-  bool get buzzerActive => flameDetected || isGasDanger;
-  bool get hasEmergency => flameDetected || isGasDanger;
+  bool get isGasDanger => gasPpm != null && gasPpm! >= 400;
+  bool get isGasWarning => gasPpm != null && gasPpm! >= 200 && gasPpm! < 400;
+  bool get isTempHigh => temperature != null && temperature! >= 32;
+  bool get isDark => lightIntensity != null && lightIntensity! < 30.0;
+  bool get isRaining => rainDetected == true;
+  bool get isPorchCameraActive => motionDetected == true;
+  bool get buzzerActive => flameDetected == true || isGasDanger;
+  bool get hasEmergency => flameDetected == true || isGasDanger;
+  bool get hasAnyData =>
+      temperature != null ||
+      humidity != null ||
+      lightIntensity != null ||
+      gasPpm != null ||
+      flameDetected != null ||
+      motionDetected != null ||
+      rainDetected != null ||
+      doorOpen != null;
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
+  }
+
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final s = value.toString().toLowerCase();
+    if (s == 'true' || s == '1') return true;
+    if (s == 'false' || s == '0') return false;
+    return null;
+  }
 
   factory SensorReading.fromJson(Map<String, dynamic> json) {
     return SensorReading(
-      temperature: (json['temperature'] as num?)?.toDouble() ?? 0.0,
-      humidity: (json['humidity'] as num?)?.toDouble() ?? 0.0,
-      lightIntensity: (json['light_intensity'] as num?)?.toDouble() ?? 0.0,
-      gasPpm: (json['gas_ppm'] as num?)?.toDouble() ?? 0.0,
-      flameDetected: json['flame_detected'] as bool? ?? false,
-      motionDetected: json['motion_detected'] as bool? ?? false,
-      rainDetected: json['rain_detected'] as bool? ?? false,
-      doorOpen: json['door_open'] as bool? ?? false,
+      temperature: _parseDouble(json['temperature']),
+      humidity: _parseDouble(json['humidity']),
+      lightIntensity: _parseDouble(json['light_intensity']),
+      gasPpm: _parseDouble(json['gas_ppm']),
+      flameDetected: _parseBool(json['flame_detected']),
+      motionDetected: _parseBool(json['motion_detected']),
+      rainDetected: _parseBool(json['rain_detected']),
+      doorOpen: _parseBool(json['door_open']),
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'].toString()) ?? DateTime.now()
           : DateTime.now(),

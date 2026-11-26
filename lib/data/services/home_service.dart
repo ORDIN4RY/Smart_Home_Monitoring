@@ -10,8 +10,8 @@ import 'api_client.dart';
 import 'mock_data_generator.dart';
 
 class HomeService {
-  /// Fetch current real-time sensor metrics
-  static Future<SensorReading> fetchCurrentSensors() async {
+  /// Fetch current real-time sensor metrics (returns null if unavailable / not yet received)
+  static Future<SensorReading?> fetchCurrentSensors() async {
     if (ApiConfig.useMockData) {
       return MockDataGenerator.tickSensorData();
     }
@@ -19,11 +19,14 @@ class HomeService {
     try {
       final response = await ApiClient.get(ApiConfig.currentSensorsUrl);
       if (response is Map<String, dynamic>) {
-        return SensorReading.fromJson(response['data'] ?? response);
+        final raw = response.containsKey('data') ? response['data'] : response;
+        if (raw is Map<String, dynamic>) {
+          return SensorReading.fromJson(raw);
+        }
       }
-      return MockDataGenerator.tickSensorData();
+      return null;
     } catch (_) {
-      return MockDataGenerator.tickSensorData();
+      return null;
     }
   }
 
@@ -33,25 +36,21 @@ class HomeService {
       return MockDataGenerator.getMockHistory();
     }
 
-    try {
-      final response = await ApiClient.get(ApiConfig.sensorHistoryUrl);
-      if (response is List) {
-        return response
-            .map((item) => SensorReading.fromJson(item as Map<String, dynamic>))
-            .toList();
-      } else if (response is Map && response['history'] is List) {
-        return (response['history'] as List)
-            .map((item) => SensorReading.fromJson(item as Map<String, dynamic>))
-            .toList();
-      }
-      return MockDataGenerator.getMockHistory();
-    } catch (_) {
-      return MockDataGenerator.getMockHistory();
+    final response = await ApiClient.get(ApiConfig.sensorHistoryUrl);
+    if (response is List) {
+      return response
+          .map((item) => SensorReading.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } else if (response is Map && response['history'] is List) {
+      return (response['history'] as List)
+          .map((item) => SensorReading.fromJson(item as Map<String, dynamic>))
+          .toList();
     }
+    return [];
   }
 
-  /// Fetch current devices status (light, cooling, door lock)
-  static Future<DeviceStatus> fetchDeviceStatus() async {
+  /// Fetch current devices status (returns null if unavailable)
+  static Future<DeviceStatus?> fetchDeviceStatus() async {
     if (ApiConfig.useMockData) {
       return MockDataGenerator.deviceStatus;
     }
@@ -59,36 +58,38 @@ class HomeService {
     try {
       final response = await ApiClient.get(ApiConfig.deviceStatusUrl);
       if (response is Map<String, dynamic>) {
-        return DeviceStatus.fromJson(response['status'] ?? response);
+        final raw = response.containsKey('status') ? response['status'] : response;
+        if (raw is Map<String, dynamic>) {
+          return DeviceStatus.fromJson(raw);
+        }
       }
-      return MockDataGenerator.deviceStatus;
+      return null;
     } catch (_) {
-      return MockDataGenerator.deviceStatus;
+      return null;
     }
   }
 
-  /// Send device control command to backend Flask API
+  /// Send device control command to backend API
   static Future<DeviceStatus> controlDevice(String deviceKey, dynamic value) async {
     if (ApiConfig.useMockData) {
       return MockDataGenerator.updateDevice(deviceKey, value);
     }
 
-    try {
-      final response = await ApiClient.post(
-        ApiConfig.controlDeviceUrl,
-        {
-          'device': deviceKey,
-          'value': value,
-        },
-      );
+    final response = await ApiClient.post(
+      ApiConfig.controlDeviceUrl,
+      {
+        'device': deviceKey,
+        'value': value,
+      },
+    );
 
-      if (response is Map<String, dynamic>) {
-        return DeviceStatus.fromJson(response['status'] ?? response);
+    if (response is Map<String, dynamic>) {
+      final raw = response.containsKey('status') ? response['status'] : response;
+      if (raw is Map<String, dynamic>) {
+        return DeviceStatus.fromJson(raw);
       }
-      return MockDataGenerator.updateDevice(deviceKey, value);
-    } catch (_) {
-      return MockDataGenerator.updateDevice(deviceKey, value);
     }
+    throw ApiException('Format respons kontrol perangkat tidak dikenali.');
   }
 
   /// Fetch important system event logs
@@ -97,24 +98,20 @@ class HomeService {
       return List.from(MockDataGenerator.eventLogs);
     }
 
-    try {
-      final response = await ApiClient.get(ApiConfig.eventsUrl);
-      if (response is List) {
-        return response
-            .map((item) => EventLog.fromJson(item as Map<String, dynamic>))
-            .toList();
-      } else if (response is Map && response['events'] is List) {
-        return (response['events'] as List)
-            .map((item) => EventLog.fromJson(item as Map<String, dynamic>))
-            .toList();
-      }
-      return List.from(MockDataGenerator.eventLogs);
-    } catch (_) {
-      return List.from(MockDataGenerator.eventLogs);
+    final response = await ApiClient.get(ApiConfig.eventsUrl);
+    if (response is List) {
+      return response
+          .map((item) => EventLog.fromJson(item as Map<String, dynamic>))
+          .toList();
+    } else if (response is Map && response['events'] is List) {
+      return (response['events'] as List)
+          .map((item) => EventLog.fromJson(item as Map<String, dynamic>))
+          .toList();
     }
+    return [];
   }
 
-  // ── Face Recognition (Flask Backend) ─────────────────────────────────
+  // ── Face Recognition ─────────────────────────────────────────────────
 
   /// GET /api/faces — daftar wajah terdaftar
   static Future<List<RegisteredFace>> fetchRegisteredFaces() async {
@@ -122,30 +119,24 @@ class HomeService {
       return List.from(MockDataGenerator.registeredFaces);
     }
 
-    try {
-      final response = await ApiClient.get(ApiConfig.facesUrl);
-      // Flask response: {"wajah": [...], "total": 3}
-      if (response is Map && response['wajah'] is List) {
-        return (response['wajah'] as List)
+    final response = await ApiClient.get(ApiConfig.facesUrl);
+    if (response is Map) {
+      final list = response['faces'] ?? response['wajah'];
+      if (list is List) {
+        return list
             .map((item) => RegisteredFace.fromJson(item as Map<String, dynamic>))
             .toList();
       }
-      // Fallback jika response langsung List
-      if (response is List) {
-        return response
-            .map((item) => RegisteredFace.fromJson(item as Map<String, dynamic>))
-            .toList();
-      }
-      return [];
-    } catch (_) {
-      return List.from(MockDataGenerator.registeredFaces);
     }
+    if (response is List) {
+      return response
+          .map((item) => RegisteredFace.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
   }
 
   /// POST /api/enroll/photo — daftarkan wajah dari foto file
-  /// [name]     — nama orang
-  /// [role]     — peran (Pemilik, Keluarga, dsb.)
-  /// [filePath] — path file foto dari image_picker
   static Future<RegisteredFace> registerNewFace(
     String name,
     String role, {
@@ -155,47 +146,39 @@ class HomeService {
       return MockDataGenerator.registerFace(name, role);
     }
 
-    // Jika ada foto, kirim sebagai multipart
     if (filePath != null && filePath.isNotEmpty) {
-      try {
-        final response = await ApiClient.postMultipart(
-          ApiConfig.enrollPhotoUrl,
-          fields: {'nama': name, 'role': role},
-          filePath: filePath,
-          fileField: 'photo',
-        );
-        // Flask response: {"nama": "Faris", "jumlah_frame": 1, "pesan": "..."}
-        if (response is Map<String, dynamic>) {
-          return RegisteredFace(
-            id: response['nama']?.toString() ?? name,
-            name: response['nama']?.toString() ?? name,
-            role: role,
-            registeredAt: DateTime.now(),
-            jumlahFrame: response['jumlah_frame'] as int? ?? 1,
-          );
-        }
-      } catch (_) {
-        return MockDataGenerator.registerFace(name, role);
-      }
-    }
-
-    // Fallback: enroll via kamera live (jika backend punya kamera)
-    try {
-      final response = await ApiClient.post(
-        '${ApiConfig.baseUrl}/api/enroll',
-        {'nama': name},
+      final response = await ApiClient.postMultipart(
+        ApiConfig.enrollPhotoUrl,
+        fields: {'nama': name, 'role': role},
+        filePath: filePath,
+        fileField: 'photo',
       );
       if (response is Map<String, dynamic>) {
         return RegisteredFace(
-          id: response['nama']?.toString() ?? name,
-          name: response['nama']?.toString() ?? name,
+          id: response['id']?.toString() ?? response['nama']?.toString() ?? name,
+          name: response['nama']?.toString() ?? response['name']?.toString() ?? name,
           role: role,
           registeredAt: DateTime.now(),
           jumlahFrame: response['jumlah_frame'] as int? ?? 1,
         );
       }
-    } catch (_) {}
-    return MockDataGenerator.registerFace(name, role);
+      throw ApiException('Format respons pendaftaran wajah tidak dikenali.');
+    }
+
+    final response = await ApiClient.post(
+      '${ApiConfig.baseUrl}/api/enroll',
+      {'nama': name, 'role': role},
+    );
+    if (response is Map<String, dynamic>) {
+      return RegisteredFace(
+        id: response['id']?.toString() ?? response['nama']?.toString() ?? name,
+        name: response['nama']?.toString() ?? response['name']?.toString() ?? name,
+        role: role,
+        registeredAt: DateTime.now(),
+        jumlahFrame: response['jumlah_frame'] as int? ?? 1,
+      );
+    }
+    throw ApiException('Format respons pendaftaran wajah tidak dikenali.');
   }
 
   /// DELETE /api/faces/{nama} — hapus wajah
@@ -204,16 +187,10 @@ class HomeService {
       MockDataGenerator.deleteFace(id);
       return;
     }
-    try {
-      // id di sini adalah nama (Flask pakai nama sebagai identifier)
-      await ApiClient.delete(ApiConfig.faceDeleteUrl(id));
-    } catch (_) {
-      MockDataGenerator.deleteFace(id);
-    }
+    await ApiClient.delete(ApiConfig.faceDeleteUrl(id));
   }
 
   /// POST /api/recognize — kenali wajah dari foto upload
-  /// Kembalikan AccessAttempt dari hasil recognition Flask
   static Future<AccessAttempt> recognizeFace(String filePath) async {
     if (ApiConfig.useMockData) {
       return MockDataGenerator.accessAttempts.first;
@@ -230,8 +207,6 @@ class HomeService {
   }
 
   /// POST /api/recognize — khusus untuk pengujian kamera realtime (Web, Mobile, Desktop)
-  /// Mendukung 2 mode pengujian: 'ai' (Sistem Cerdas: YuNet + SFace) dan 'cv' (Computer Vision: Haar + LBPH)
-  /// Mengukur latency (ms), menangani status 200, 403 (spoof), 404 (tidak ada wajah) secara mulus
   static Future<AccessAttempt> testRecognizeRealtime(dynamic fileOrPath, {String mode = 'ai'}) async {
     final stopwatch = Stopwatch()..start();
     try {
@@ -293,7 +268,7 @@ class HomeService {
         isLivenessPassed: false,
         livenessScore: 0.0,
         isAuthorized: false,
-        message: 'Gagal terhubung ke backend: $e. Pastikan server Flask (app.py) aktif.',
+        message: 'Gagal terhubung ke backend: $e',
         timestamp: DateTime.now(),
         latencyMs: stopwatch.elapsedMilliseconds,
         mode: mode,
@@ -301,7 +276,7 @@ class HomeService {
     }
   }
 
-  /// GET /api/status — hasil recognition terakhir dari worker kamera backend
+  /// GET /api/status — hasil recognition terakhir dari backend
   static Future<AccessAttempt> fetchLastRecognitionStatus() async {
     if (ApiConfig.useMockData) {
       return MockDataGenerator.accessAttempts.first;
@@ -313,17 +288,23 @@ class HomeService {
     throw ApiException('Format respons status tidak dikenali.');
   }
 
-  /// GET /api/faces/attempts — riwayat akses pintu (endpoint opsional, mock jika tidak ada)
+  /// GET /api/faces/attempts — riwayat akses pintu
   static Future<List<AccessAttempt>> fetchAccessAttempts() async {
     if (ApiConfig.useMockData) {
       return List.from(MockDataGenerator.accessAttempts);
     }
-    try {
-      // Coba GET /api/status untuk status terakhir jika tidak ada endpoint attempts
-      final snap = await fetchLastRecognitionStatus();
-      return [snap];
-    } catch (_) {
-      return List.from(MockDataGenerator.accessAttempts);
+
+    final response = await ApiClient.get(ApiConfig.accessAttemptsUrl);
+    if (response is Map && response['attempts'] is List) {
+      return (response['attempts'] as List)
+          .map((item) => AccessAttempt.fromJson(item as Map<String, dynamic>))
+          .toList();
     }
+    if (response is List) {
+      return response
+          .map((item) => AccessAttempt.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
   }
 }

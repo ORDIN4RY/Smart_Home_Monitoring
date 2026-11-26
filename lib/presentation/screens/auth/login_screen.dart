@@ -72,17 +72,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   Center(
                     child: NeuBox(
                       shape: BoxShape.circle,
-                      padding: const EdgeInsets.all(22),
-                      child: const Icon(
-                        Icons.home_outlined,
-                        size: 44,
-                        color: AppColors.textPrimary,
+                      padding: const EdgeInsets.all(18),
+                      child: Image.asset(
+                        Theme.of(context).brightness == Brightness.dark
+                            ? 'assets/images/logo_dark.png'
+                            : 'assets/images/logo_light.png',
+                        width: 60,
+                        height: 60,
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
                   const Text(
-                    'Smart Home System',
+                    'Homatix',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 26,

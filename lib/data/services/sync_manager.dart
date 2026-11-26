@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/api_config.dart';
 import '../models/device_status.dart';
 import '../models/sensor_reading.dart';
+import 'api_client.dart';
 import 'home_service.dart';
 import 'mock_data_generator.dart';
+import 'mqtt_service.dart';
 import 'server_connection_manager.dart';
 
 enum SyncStatus {
@@ -18,36 +20,22 @@ enum SyncStatus {
 }
 
 class SyncManager {
-  static const String _keyDeviceStatus = 'smarthome_device_status';
-  static const String _keySensorReading = 'smarthome_sensor_reading';
-  static const String _keyPendingSettings = 'smarthome_pending_settings';
-  static const String _keyLastSyncTime = 'smarthome_last_sync_time';
+  static const String _keyPendingSettings = 'homatix_pending_settings';
+  static const String _keyLastSyncTime = 'homatix_last_sync_time';
 
   // ── Reactive Notifiers (Single Source of Truth) ──
+  // Mulai sebagai null ("Tidak Terdeteksi") hingga data aktual diterima dari server/MQTT
   static final ValueNotifier<SyncStatus> syncStatus =
       ValueNotifier<SyncStatus>(SyncStatus.syncing);
 
   static final ValueNotifier<DateTime?> lastSyncTime =
       ValueNotifier<DateTime?>(null);
 
-  static final ValueNotifier<DeviceStatus> currentDeviceStatus =
-      ValueNotifier<DeviceStatus>(
-    DeviceStatus(lastUpdated: DateTime.now()),
-  );
+  static final ValueNotifier<DeviceStatus?> currentDeviceStatus =
+      ValueNotifier<DeviceStatus?>(null);
 
-  static final ValueNotifier<SensorReading> currentSensors =
-      ValueNotifier<SensorReading>(
-    SensorReading(
-      temperature: 24.0,
-      humidity: 50.0,
-      lightIntensity: 50.0,
-      gasPpm: 0.0,
-      flameDetected: false,
-      motionDetected: false,
-      doorOpen: false,
-      timestamp: DateTime.now(),
-    ),
-  );
+  static final ValueNotifier<SensorReading?> currentSensors =
+      ValueNotifier<SensorReading?>(null);
 
   static final ValueNotifier<int> pendingChangesCount =
       ValueNotifier<int>(0);
@@ -56,7 +44,7 @@ class SyncManager {
   static bool _isSyncing = false;
   static SharedPreferences? _prefs;
 
-  /// Inisialisasi local storage & load data lokal pertama kali (offline-first)
+  /// Inisialisasi local storage & sinkronisasi berkala
   static Future<void> initialize() async {
     try {
       _prefs = await SharedPreferences.getInstance();
@@ -65,14 +53,28 @@ class SyncManager {
       debugPrint('[SyncManager] Gagal memuat local storage: $e');
     }
 
-    // Pantau perubahan koneksi dari ServerConnectionManager
     ServerConnectionManager.status.addListener(_onServerConnectionChanged);
 
-    // Jalankan timer sinkronisasi berkala (tiap 5 detik)
     _syncTimer?.cancel();
     _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       syncAll(silent: true);
     });
+
+    unawaited(MqttService.initialize());
+  }
+
+  /// Terapkan update sensor realtime dari MQTT tanpa menunggu polling HTTP
+  static void applyRealtimeSensors(SensorReading reading) {
+    currentSensors.value = reading;
+    lastSyncTime.value = DateTime.now();
+    syncStatus.value = SyncStatus.synced;
+  }
+
+  /// Terapkan update status perangkat realtime dari MQTT
+  static void applyRealtimeDeviceStatus(DeviceStatus status) {
+    if (pendingChangesCount.value == 0) {
+      currentDeviceStatus.value = status;
+    }
   }
 
   static void dispose() {
@@ -82,9 +84,17 @@ class SyncManager {
 
   static void _onServerConnectionChanged() {
     final connState = ServerConnectionManager.status.value;
-    if (connState == ServerConnectionState.disconnected &&
-        syncStatus.value != SyncStatus.offline) {
-      syncStatus.value = SyncStatus.offline;
+    if (connState == ServerConnectionState.disconnected) {
+      if (syncStatus.value != SyncStatus.offline) {
+        syncStatus.value = SyncStatus.offline;
+      }
+      // Jangan tampilkan nilai dummy/basi saat server terputus
+      if (!ApiConfig.useMockData) {
+        currentSensors.value = null;
+        if (pendingChangesCount.value == 0) {
+          currentDeviceStatus.value = null;
+        }
+      }
     } else if (connState == ServerConnectionState.mockMode) {
       syncStatus.value = SyncStatus.mock;
     } else if (connState == ServerConnectionState.connected &&
@@ -93,30 +103,12 @@ class SyncManager {
     }
   }
 
-  /// Memuat data dari local SharedPreferences ke dalam memori aplikasi
   static Future<void> _loadFromLocalStorage() async {
     if (_prefs == null) return;
-
     try {
-      // 1. Muat DeviceStatus lokal
-      final devJsonStr = _prefs!.getString(_keyDeviceStatus);
-      if (devJsonStr != null && devJsonStr.isNotEmpty) {
-        final Map<String, dynamic> devMap = jsonDecode(devJsonStr);
-        currentDeviceStatus.value = DeviceStatus.fromJson(devMap);
-      }
-
-      // 2. Muat SensorReading lokal
-      final sensJsonStr = _prefs!.getString(_keySensorReading);
-      if (sensJsonStr != null && sensJsonStr.isNotEmpty) {
-        final Map<String, dynamic> sensMap = jsonDecode(sensJsonStr);
-        currentSensors.value = SensorReading.fromJson(sensMap);
-      }
-
-      // 3. Muat Pending Settings
       final pendingMap = _getPendingSettingsMap();
       pendingChangesCount.value = pendingMap.length;
 
-      // 4. Muat Waktu Sinkronisasi Terakhir
       final lastSyncStr = _prefs!.getString(_keyLastSyncTime);
       if (lastSyncStr != null && lastSyncStr.isNotEmpty) {
         lastSyncTime.value = DateTime.tryParse(lastSyncStr);
@@ -143,35 +135,14 @@ class SyncManager {
     pendingChangesCount.value = map.length;
   }
 
-  /// Simpan status perangkat saat ini ke local storage
-  static Future<void> _saveDeviceStatusLocal(DeviceStatus status) async {
-    if (_prefs == null) return;
-    try {
-      await _prefs!.setString(_keyDeviceStatus, jsonEncode(status.toJson()));
-    } catch (e) {
-      debugPrint('[SyncManager] Gagal simpan DeviceStatus ke local: $e');
-    }
-  }
-
-  /// Simpan nilai sensor saat ini ke local storage
-  static Future<void> _saveSensorsLocal(SensorReading sensors) async {
-    if (_prefs == null) return;
-    try {
-      await _prefs!.setString(_keySensorReading, jsonEncode(sensors.toJson()));
-    } catch (e) {
-      debugPrint('[SyncManager] Gagal simpan SensorReading ke local: $e');
-    }
-  }
-
-  /// Update pengaturan perangkat secara lokal terlebih dahulu (optimistic update),
-  /// lalu secara otomatis disinkronkan ke server bila terhubung.
+  /// Update pengaturan perangkat dan sinkronkan ke server
   static Future<void> updateDeviceSetting(
     String deviceKey,
     dynamic value, {
     bool syncImmediately = true,
   }) async {
-    // 1. Terapkan perubahan ke state lokal (Single Source of Truth)
-    final current = currentDeviceStatus.value;
+    final current = currentDeviceStatus.value ??
+        DeviceStatus(lastUpdated: DateTime.now());
     DeviceStatus updated = current;
 
     switch (deviceKey) {
@@ -200,25 +171,24 @@ class SyncManager {
         updated = current.copyWith(buzzerOn: value as bool);
         break;
       case 'door_lock':
-        updated = current.copyWith(doorLocked: value as bool);
+        // Untuk pintu: tandai transisi sambil menunggu konfirmasi Wemos
+        updated = current.copyWith(
+          doorTransition: (value as bool) ? 'closing' : 'opening',
+        );
         break;
     }
 
     currentDeviceStatus.value = updated;
-    await _saveDeviceStatusLocal(updated);
 
-    // 2. Tandai perubahan ini di pending settings (untuk dikirim ke server)
     final pending = _getPendingSettingsMap();
     pending[deviceKey] = value;
     await _savePendingSettingsMap(pending);
 
-    // 3. Jika diminta sinkron segera, lakukan push ke server
     if (syncImmediately) {
-      unawaited(syncAll(silent: true));
+      await syncAll(silent: true);
     }
   }
 
-  /// Simpan batch pengaturan (misal dari form atau dialog pengaturan sekaligus)
   static Future<void> updateMultipleSettings(Map<String, dynamic> settings) async {
     for (final entry in settings.entries) {
       await updateDeviceSetting(entry.key, entry.value, syncImmediately: false);
@@ -226,10 +196,7 @@ class SyncManager {
     await syncAll(silent: false);
   }
 
-  /// Sinkronisasi penuh antara Local Storage dan Server Backend:
-  /// - Sensor: disamakan dengan server (Server is authoritative for sensor telemetry).
-  /// - Setting: disamakan dengan local jika ada perubahan lokal (Local is authoritative for pending user intents),
-  ///   kemudian dikirim ke server. Jika tidak ada perubahan lokal, ambil dari server.
+  /// Sinkronisasi antara perangkat dan server backend
   static Future<bool> syncAll({bool silent = false}) async {
     if (_isSyncing) return false;
     _isSyncing = true;
@@ -239,14 +206,10 @@ class SyncManager {
     }
 
     try {
-      // Periksa apakah mode mock aktif
       if (ApiConfig.useMockData) {
         final mockSensors = MockDataGenerator.tickSensorData();
-
         currentSensors.value = mockSensors;
-        await _saveSensorsLocal(mockSensors);
 
-        // Jika ada pending setting, aplikasikan ke mock
         final pending = _getPendingSettingsMap();
         if (pending.isNotEmpty) {
           for (final entry in pending.entries) {
@@ -256,7 +219,6 @@ class SyncManager {
         }
 
         currentDeviceStatus.value = MockDataGenerator.deviceStatus;
-        await _saveDeviceStatusLocal(MockDataGenerator.deviceStatus);
 
         lastSyncTime.value = DateTime.now();
         if (_prefs != null) {
@@ -268,10 +230,13 @@ class SyncManager {
         return true;
       }
 
-      // Cek konektivitas ke server
       final isOnline = await ServerConnectionManager.checkConnection();
       if (!isOnline) {
         syncStatus.value = SyncStatus.offline;
+        currentSensors.value = null;
+        if (pendingChangesCount.value == 0) {
+          currentDeviceStatus.value = null;
+        }
         _isSyncing = false;
         return false;
       }
@@ -282,11 +247,17 @@ class SyncManager {
         final sentKeys = <String>[];
         for (final entry in pending.entries) {
           try {
-            await HomeService.controlDevice(entry.key, entry.value);
+            final resStatus = await HomeService.controlDevice(entry.key, entry.value);
+            currentDeviceStatus.value = resStatus;
             sentKeys.add(entry.key);
+          } on ApiException catch (e) {
+            debugPrint('[SyncManager] Tolak/gagal push setting ${entry.key}: ${e.message}');
+            if (e.statusCode == 400 || e.statusCode == 409) {
+              // Jangan ulang terus-menerus jika ditolak (mis. pintu sedang sibuk)
+              sentKeys.add(entry.key);
+            }
           } catch (e) {
             debugPrint('[SyncManager] Gagal push setting ${entry.key}: $e');
-            // Biarkan di antrian pending jika gagal kirim
           }
         }
         for (final k in sentKeys) {
@@ -295,29 +266,16 @@ class SyncManager {
         await _savePendingSettingsMap(pending);
       }
 
-      // ── Step 2: Sinkronisasi Sensor (Authoritative: Server) ──
-      try {
-        final serverSensors = await HomeService.fetchCurrentSensors();
-        currentSensors.value = serverSensors;
-        await _saveSensorsLocal(serverSensors);
-      } catch (e) {
-        debugPrint('[SyncManager] Gagal fetch sensor: $e');
-      }
+      // ── Step 2: Sinkronisasi Sensor (Server Authoritative, null jika belum ada status) ──
+      final serverSensors = await HomeService.fetchCurrentSensors();
+      currentSensors.value = serverSensors;
 
-      // ── Step 3: Sinkronisasi Device Settings ──
-      // Jika masih ada pending setting lokal, pertahankan local status.
-      // Jika tidak ada pending, perbarui dari respons server.
+      // ── Step 3: Sinkronisasi Device Status ──
       if (pending.isEmpty) {
-        try {
-          final serverDevices = await HomeService.fetchDeviceStatus();
-          currentDeviceStatus.value = serverDevices;
-          await _saveDeviceStatusLocal(serverDevices);
-        } catch (e) {
-          debugPrint('[SyncManager] Gagal fetch device status: $e');
-        }
+        final serverDevices = await HomeService.fetchDeviceStatus();
+        currentDeviceStatus.value = serverDevices;
       }
 
-      // ── Step 4: Catat Waktu Sinkronisasi Sukses ──
       final now = DateTime.now();
       lastSyncTime.value = now;
       if (_prefs != null) {

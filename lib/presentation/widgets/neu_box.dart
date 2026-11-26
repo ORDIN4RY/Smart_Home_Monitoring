@@ -88,6 +88,11 @@ class NeuBox extends StatelessWidget {
           glowColor: glowColor,
           glowRadius: glowRadius,
         ),
+        // Border transparan 1px agar ukuran identik dengan state isPressed (zero layout shift)
+        border: Border.all(
+          color: Colors.transparent,
+          width: 1.0,
+        ),
       );
     }
 

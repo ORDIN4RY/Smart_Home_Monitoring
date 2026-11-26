@@ -8,7 +8,7 @@ class AuthService {
   static UserModel? get currentUser => _currentUser;
   static bool get isAuthenticated => _currentUser != null;
 
-  /// Login with email and password via Flask REST API (or fallback to Mock)
+  /// Login with email and password via REST API (mock only when useMockData == true)
   static Future<UserModel> login(String email, String password) async {
     if (ApiConfig.useMockData) {
       await Future.delayed(const Duration(milliseconds: 600));
@@ -17,24 +17,17 @@ class AuthService {
       return _currentUser!;
     }
 
-    try {
-      final response = await ApiClient.post(
-        ApiConfig.loginUrl,
-        {'email': email, 'password': password},
-      );
+    final response = await ApiClient.post(
+      ApiConfig.loginUrl,
+      {'email': email, 'password': password},
+    );
 
-      if (response is Map<String, dynamic>) {
-        _currentUser = UserModel.fromJson(response['user'] ?? response);
-        ApiClient.authToken = _currentUser!.token;
-        return _currentUser!;
-      }
-      throw ApiException('Format respon login tidak dikenali.');
-    } catch (e) {
-      // If live connection fails, fallback to mock user for smooth demonstration
-      _currentUser = MockDataGenerator.currentUser;
+    if (response is Map<String, dynamic>) {
+      _currentUser = UserModel.fromJson(response['user'] ?? response);
       ApiClient.authToken = _currentUser!.token;
       return _currentUser!;
     }
+    throw ApiException('Format respon login tidak dikenali.');
   }
 
   /// Logout from system
@@ -61,6 +54,6 @@ class AuthService {
         return _currentUser;
       }
     } catch (_) {}
-    return _currentUser ?? MockDataGenerator.currentUser;
+    return _currentUser;
   }
 }

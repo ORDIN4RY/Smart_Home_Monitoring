@@ -20,6 +20,7 @@ class _SecurityScreenState extends State<SecurityScreen> {
   List<RegisteredFace> _faces = [];
   List<AccessAttempt> _attempts = [];
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -28,15 +29,29 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    final faces = await HomeService.fetchRegisteredFaces();
-    final attempts = await HomeService.fetchAccessAttempts();
-    if (mounted) {
-      setState(() {
-        _faces = faces;
-        _attempts = attempts;
-        _isLoading = false;
-      });
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+    try {
+      final faces = await HomeService.fetchRegisteredFaces();
+      final attempts = await HomeService.fetchAccessAttempts();
+      if (mounted) {
+        setState(() {
+          _faces = faces;
+          _attempts = attempts;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _faces = [];
+          _attempts = [];
+          _loadError = 'Server tidak terhubung (status tidak terdeteksi)';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -531,11 +546,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
                             child: const Icon(Icons.security, color: AppColors.primary, size: 26),
                           ),
                           const SizedBox(width: 14),
-                          const Expanded(
+                          Expanded(
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Expanded(
+                                const Expanded(
                                   child: Text(
                                     'Proteksi Pintu',
                                     style: TextStyle(
@@ -547,8 +562,11 @@ class _SecurityScreenState extends State<SecurityScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                SizedBox(width: 8),
-                                StatusBadge(label: 'Aktif', type: BadgeType.normal),
+                                const SizedBox(width: 8),
+                                StatusBadge(
+                                  label: _loadError != null ? 'Tidak Terdeteksi' : 'Aktif',
+                                  type: _loadError != null ? BadgeType.warning : BadgeType.normal,
+                                ),
                               ],
                             ),
                           ),
@@ -745,7 +763,19 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     const SizedBox(height: 14),
 
                     // Registered Faces List (NeuBox cards)
-                    if (_faces.isEmpty)
+                    if (_loadError != null)
+                      NeuBox(
+                        isPressed: true,
+                        padding: const EdgeInsets.all(20),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Center(
+                          child: Text(
+                            _loadError!,
+                            style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                          ),
+                        ),
+                      )
+                    else if (_faces.isEmpty)
                       NeuBox(
                         isPressed: true,
                         padding: const EdgeInsets.all(20),
@@ -813,78 +843,200 @@ class _SecurityScreenState extends State<SecurityScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _attempts.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 10),
-                      itemBuilder: (context, idx) {
-                        final att = _attempts[idx];
-                        final isAttack = att.isSpoofAttack;
-
-                        return NeuBox(
-                          padding: const EdgeInsets.all(14),
-                          borderRadius: BorderRadius.circular(18),
-                          glowColor: isAttack ? AppColors.danger.withAlpha(40) : null,
-                          glowRadius: isAttack ? 10 : 0,
-                          child: Row(
-                            children: [
-                              NeuBox(
-                                isPressed: true,
-                                shape: BoxShape.circle,
-                                padding: const EdgeInsets.all(8),
-                                glowColor: (isAttack ? AppColors.danger : AppColors.normal).withAlpha(40),
-                                glowRadius: 4,
-                                child: Icon(
-                                  isAttack ? Icons.block : Icons.check_circle_outline,
-                                  color: isAttack ? AppColors.danger : AppColors.normal,
-                                  size: 20,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            att.matchedName ?? 'Tidak Dikenal',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: isAttack ? AppColors.danger : AppColors.textPrimary,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        StatusBadge(
-                                          label: isAttack ? 'DITOLAK' : 'DIIZINKAN',
-                                          type: isAttack ? BadgeType.danger : BadgeType.normal,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      AppFormatters.formatTimestamp(att.timestamp),
-                                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                    if (_attempts.isEmpty)
+                      NeuBox(
+                        isPressed: true,
+                        padding: const EdgeInsets.all(20),
+                        borderRadius: BorderRadius.circular(18),
+                        child: Center(
+                          child: Text(
+                            _loadError ?? 'Belum ada riwayat akses',
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      )
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _attempts.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 10),
+                        itemBuilder: (context, idx) {
+                          final att = _attempts[idx];
+                          final isAttack = att.isSpoofAttack;
+                          final isAllowed = att.isAuthorized;
+                          final accent = isAttack
+                              ? AppColors.danger
+                              : (isAllowed ? AppColors.normal : AppColors.warning);
+
+                          return NeuBox(
+                            onTap: att.fullSnapshotUrl != null
+                                ? () => _showSnapshotDialog(att)
+                                : null,
+                            padding: const EdgeInsets.all(14),
+                            borderRadius: BorderRadius.circular(18),
+                            glowColor: isAttack ? AppColors.danger.withAlpha(40) : null,
+                            glowRadius: isAttack ? 10 : 0,
+                            child: Row(
+                              children: [
+                                if (att.fullSnapshotUrl != null)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      att.fullSnapshotUrl!,
+                                      width: 44,
+                                      height: 44,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => NeuBox(
+                                        isPressed: true,
+                                        shape: BoxShape.circle,
+                                        padding: const EdgeInsets.all(8),
+                                        child: Icon(Icons.block, color: accent, size: 20),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  NeuBox(
+                                    isPressed: true,
+                                    shape: BoxShape.circle,
+                                    padding: const EdgeInsets.all(8),
+                                    glowColor: accent.withAlpha(40),
+                                    glowRadius: 4,
+                                    child: Icon(
+                                      isAllowed
+                                          ? Icons.check_circle_outline
+                                          : Icons.block,
+                                      color: accent,
+                                      size: 20,
+                                    ),
+                                  ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              att.matchedName ?? 'Tidak Dikenal',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: isAttack ? AppColors.danger : AppColors.textPrimary,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          StatusBadge(
+                                            label: isAllowed
+                                                ? 'DIIZINKAN'
+                                                : (isAttack ? 'SPOOF' : 'DITOLAK'),
+                                            type: isAttack
+                                                ? BadgeType.danger
+                                                : (isAllowed
+                                                    ? BadgeType.normal
+                                                    : BadgeType.warning),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              AppFormatters.formatTimestamp(att.timestamp),
+                                              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                            ),
+                                          ),
+                                          if (att.fullSnapshotUrl != null)
+                                            const Text(
+                                              'Lihat foto >',
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     const SizedBox(height: 20),
                   ],
                 ),
               ),
             ),
+    );
+  }
+
+  void _showSnapshotDialog(AccessAttempt att) {
+    final isAttack = att.isSpoofAttack;
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.neuBase,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    isAttack ? 'Percobaan Spoofing' : 'Wajah Tidak Dikenal',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: isAttack ? AppColors.danger : AppColors.textPrimary,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  child: Image.network(
+                    att.fullSnapshotUrl!,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox(
+                      height: 160,
+                      child: Center(child: Text('Foto gagal dimuat')),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                att.message,
+                style: const TextStyle(fontSize: 12.5, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${AppFormatters.formatTimestamp(att.timestamp)} • Liveness ${att.livenessPercent}',
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

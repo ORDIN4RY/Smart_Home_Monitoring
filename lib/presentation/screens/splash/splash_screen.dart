@@ -104,7 +104,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     // 4. Ready
     setState(() {
-      _loadingMessage = 'Memulai Smart Home...';
+      _loadingMessage = 'Memulai Homatix...';
       _loadingProgress = 1.0;
     });
 
@@ -147,20 +147,23 @@ class _SplashScreenState extends State<SplashScreen>
                     // Neumorphic Logo Icon
                     NeuBox(
                       shape: BoxShape.circle,
-                      padding: const EdgeInsets.all(26),
+                      padding: const EdgeInsets.all(20),
                       glowColor: AppColors.primary.withAlpha(25),
                       glowRadius: 12,
-                      child: const Icon(
-                        Icons.home_outlined,
-                        size: 48,
-                        color: AppColors.primary,
+                      child: Image.asset(
+                        Theme.of(context).brightness == Brightness.dark
+                            ? 'assets/images/logo_dark.png'
+                            : 'assets/images/logo_light.png',
+                        width: 64,
+                        height: 64,
+                        fit: BoxFit.contain,
                       ),
                     ),
                     const SizedBox(height: 24),
 
                     // App Title
                     const Text(
-                      'Smart Home',
+                      'Homatix',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -172,7 +175,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                     // Subtitle
                     const Text(
-                      'Monitoring & IoT System',
+                      'Smart Home & IoT System',
                       style: TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,

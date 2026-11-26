@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.smarthome" "\0"
-            VALUE "FileDescription", "smart_home_monitoring" "\0"
+            VALUE "FileDescription", "Homatix" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "smart_home_monitoring" "\0"
+            VALUE "InternalName", "Homatix" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.smarthome. All rights reserved." "\0"
             VALUE "OriginalFilename", "smart_home_monitoring.exe" "\0"
-            VALUE "ProductName", "smart_home_monitoring" "\0"
+            VALUE "ProductName", "Homatix" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

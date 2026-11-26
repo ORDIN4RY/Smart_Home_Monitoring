@@ -20,6 +20,7 @@ class _HistoryScreenState extends State<HistoryScreen>
   List<EventLog> _events = [];
   List<SensorReading> _sensorHistory = [];
   bool _isLoading = true;
+  String? _loadError;
   String _selectedCategory = 'all';
 
   @override
@@ -36,15 +37,29 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Future<void> _loadHistoryData() async {
-    setState(() => _isLoading = true);
-    final events = await HomeService.fetchEventLogs();
-    final history = await HomeService.fetchSensorHistory();
-    if (mounted) {
-      setState(() {
-        _events = events;
-        _sensorHistory = history;
-        _isLoading = false;
-      });
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+    try {
+      final events = await HomeService.fetchEventLogs();
+      final history = await HomeService.fetchSensorHistory();
+      if (mounted) {
+        setState(() {
+          _events = events;
+          _sensorHistory = history;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _events = [];
+          _sensorHistory = [];
+          _loadError = 'Status tidak terdeteksi (server offline)';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -129,14 +144,21 @@ class _HistoryScreenState extends State<HistoryScreen>
           ),
         ),
         Expanded(
-          child: _filteredEvents.isEmpty
-              ? const Center(
+          child: _loadError != null
+              ? Center(
                   child: Text(
-                    'Tidak ada event pada kategori ini',
-                    style: TextStyle(color: AppColors.textSecondary),
+                    _loadError!,
+                    style: const TextStyle(color: AppColors.textMuted),
                   ),
                 )
-              : ListView.separated(
+              : _filteredEvents.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Tidak ada event pada kategori ini',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    )
+                  : ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                   itemCount: _filteredEvents.length,
                   separatorBuilder: (context, index) => const SizedBox(height: 12),
@@ -263,6 +285,15 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Widget _buildSensorHistoryList() {
+    if (_loadError != null) {
+      return Center(
+        child: Text(
+          _loadError!,
+          style: const TextStyle(color: AppColors.textMuted),
+        ),
+      );
+    }
+
     if (_sensorHistory.isEmpty) {
       return const Center(
         child: Text(
@@ -303,11 +334,11 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
               Row(
                 children: [
-                  _metricCol('Suhu', '${item.temperature.toStringAsFixed(1)}°C'),
+                  _metricCol('Suhu', item.temperature != null ? '${item.temperature!.toStringAsFixed(1)}°C' : '--'),
                   const SizedBox(width: 16),
-                  _metricCol('Lembap', '${item.humidity.toStringAsFixed(0)}%'),
+                  _metricCol('Lembap', item.humidity != null ? '${item.humidity!.toStringAsFixed(0)}%' : '--'),
                   const SizedBox(width: 16),
-                  _metricCol('Gas', '${item.gasPpm.toStringAsFixed(0)} PPM'),
+                  _metricCol('Gas', item.gasPpm != null ? '${item.gasPpm!.toStringAsFixed(0)} PPM' : '--'),
                 ],
               ),
             ],

@@ -1,3 +1,5 @@
+import '../../core/config/api_config.dart';
+
 class RegisteredFace {
   final String id;
   final String name;
@@ -57,6 +59,7 @@ class AccessAttempt {
   final double? distance;        // Jarak Chi-Square / Euclidean untuk CV
   final List<String>? pipelineStages; // Tahapan pipeline Computer Vision klasik
   final List<Map<String, String>>? pipelinePreviews; // Thumbnail base64 tahapan CV (Crop, Gray, LBP)
+  final String? snapshotUrl; // Path/URL foto pelaku jika tidak dikenal / spoof
 
   const AccessAttempt({
     required this.id,
@@ -75,7 +78,14 @@ class AccessAttempt {
     this.distance,
     this.pipelineStages,
     this.pipelinePreviews,
+    this.snapshotUrl,
   });
+
+  String? get fullSnapshotUrl {
+    if (snapshotUrl == null || snapshotUrl!.isEmpty) return null;
+    if (snapshotUrl!.startsWith('http')) return snapshotUrl;
+    return '${ApiConfig.baseUrl}$snapshotUrl';
+  }
 
   bool get isSpoofAttack => !isLivenessPassed;
   bool get isCvMode => mode == 'cv';
@@ -155,6 +165,7 @@ class AccessAttempt {
       distance: parsedDist?.toDouble(),
       pipelineStages: stages,
       pipelinePreviews: previews,
+      snapshotUrl: json['snapshot_url']?.toString(),
     );
   }
 
@@ -174,5 +185,6 @@ class AccessAttempt {
         'metode': method,
         'distance': distance,
         'tahapan': pipelineStages,
+        'snapshot_url': snapshotUrl,
       };
 }

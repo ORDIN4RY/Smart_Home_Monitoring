@@ -34,7 +34,7 @@ class SmartHomeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Home Monitoring',
+      title: 'Homatix',
       debugShowCheckedModeBanner: false,
       theme: AppColors.themeData,
       home: const SplashScreen(),

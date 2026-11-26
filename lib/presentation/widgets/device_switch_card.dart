@@ -7,7 +7,7 @@ class DeviceSwitchCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String description;
-  final bool isOn;
+  final bool? isOn;
   final bool? isAutoMode;
   final ValueChanged<bool>? onToggle;
   final ValueChanged<bool>? onAutoModeChanged;
@@ -27,6 +27,9 @@ class DeviceSwitchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final active = isOn == true;
+    final available = isOn != null;
+
     return NeuBox(
       padding: const EdgeInsets.all(18),
       borderRadius: BorderRadius.circular(24),
@@ -36,12 +39,14 @@ class DeviceSwitchCard extends StatelessWidget {
           Row(
             children: [
               NeuBox(
-                isPressed: isOn,
+                isPressed: active,
                 shape: BoxShape.circle,
                 padding: const EdgeInsets.all(12),
                 child: Icon(
                   icon,
-                  color: isOn ? AppColors.textPrimary : AppColors.textMuted,
+                  color: active
+                      ? AppColors.textPrimary
+                      : (available ? AppColors.textMuted : AppColors.textMuted),
                   size: 22,
                 ),
               ),
@@ -62,16 +67,16 @@ class DeviceSwitchCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       description,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: available ? AppColors.textSecondary : AppColors.textMuted,
                       ),
                     ),
                   ],
                 ),
               ),
               NeuSwitch(
-                value: isOn,
+                value: active,
                 onChanged: (isAutoMode == true) ? null : onToggle,
               ),
             ],

@@ -1,46 +1,72 @@
 class DeviceStatus {
-  final bool lightOn;
-  final bool coolingOn; // Peltier cooling unit
-  final bool doorLocked;// Solenoid door lock
-  final bool roofOpen;  // Atap teras / rumah (true = buka, false = tutup)
-  final bool buzzerOn;  // Buzzer alarm khusus bahaya Flame & MQ-2
-  final bool porchCameraActive; // Kamera teras aktif ketika PIR deteksi gerakan
+  final bool? lightOn;
+  final bool? coolingOn; // Peltier cooling unit
+  final bool? doorLocked; // Solenoid door lock
+  final bool? roofOpen; // Atap teras / rumah (true = buka, false = tutup)
+  final bool? buzzerOn; // Buzzer alarm khusus bahaya Flame & MQ-2
+  final bool? porchCameraActive; // Kamera teras aktif ketika PIR deteksi gerakan
 
   final bool lightAutoMode;
   final bool coolingAutoMode;
   final bool roofAutoMode; // Mode otomatis atap berdasarkan sensor hujan
   final double targetTemperature;
-  final int peltierPwm; // Duty cycle PWM modul MOSFET pendingin (0-100%)
+  final int? peltierPwm; // Duty cycle PWM modul MOSFET pendingin (0-100%)
+  final String doorTransition; // 'idle', 'opening', 'closing'
+  final bool doorOnline;
   final DateTime lastUpdated;
 
   const DeviceStatus({
-    this.lightOn = false,
-    this.coolingOn = false,
-    this.doorLocked = true,
-    this.roofOpen = true,
-    this.buzzerOn = false,
-    this.porchCameraActive = false,
+    this.lightOn,
+    this.coolingOn,
+    this.doorLocked,
+    this.roofOpen,
+    this.buzzerOn,
+    this.porchCameraActive,
     this.lightAutoMode = true,
     this.coolingAutoMode = true,
     this.roofAutoMode = true,
     this.targetTemperature = 24.0,
-    this.peltierPwm = 0,
+    this.peltierPwm,
+    this.doorTransition = 'idle',
+    this.doorOnline = false,
     required this.lastUpdated,
   });
 
+  bool get isDoorBusy =>
+      doorTransition == 'opening' || doorTransition == 'closing';
+
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final s = value.toString().toLowerCase();
+    if (s == 'true' || s == '1') return true;
+    if (s == 'false' || s == '0') return false;
+    return null;
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
   factory DeviceStatus.fromJson(Map<String, dynamic> json) {
     return DeviceStatus(
-      lightOn: json['light_on'] as bool? ?? false,
-      coolingOn: json['cooling_on'] as bool? ?? false,
-      doorLocked: json['door_locked'] as bool? ?? true,
-      roofOpen: json['roof_open'] as bool? ?? true,
-      buzzerOn: json['buzzer_on'] as bool? ?? false,
-      porchCameraActive: json['porch_camera_active'] as bool? ?? false,
-      lightAutoMode: json['light_auto_mode'] as bool? ?? true,
-      coolingAutoMode: json['cooling_auto_mode'] as bool? ?? true,
-      roofAutoMode: json['roof_auto_mode'] as bool? ?? true,
-      targetTemperature: (json['target_temperature'] as num?)?.toDouble() ?? 24.0,
-      peltierPwm: (json['peltier_pwm'] as num?)?.toInt() ?? 0,
+      lightOn: _parseBool(json['light_on']),
+      coolingOn: _parseBool(json['cooling_on']),
+      doorLocked: _parseBool(json['door_locked']),
+      roofOpen: _parseBool(json['roof_open']),
+      buzzerOn: _parseBool(json['buzzer_on']),
+      porchCameraActive: _parseBool(json['porch_camera_active']),
+      lightAutoMode: _parseBool(json['light_auto_mode']) ?? true,
+      coolingAutoMode: _parseBool(json['cooling_auto_mode']) ?? true,
+      roofAutoMode: _parseBool(json['roof_auto_mode']) ?? true,
+      targetTemperature:
+          (json['target_temperature'] as num?)?.toDouble() ?? 24.0,
+      peltierPwm: _parseInt(json['peltier_pwm']),
+      doorTransition: json['door_transition']?.toString() ?? 'idle',
+      doorOnline: _parseBool(json['door_online']) ?? false,
       lastUpdated: json['last_updated'] != null
           ? DateTime.tryParse(json['last_updated'].toString()) ?? DateTime.now()
           : DateTime.now(),
@@ -60,6 +86,8 @@ class DeviceStatus {
       'roof_auto_mode': roofAutoMode,
       'target_temperature': targetTemperature,
       'peltier_pwm': peltierPwm,
+      'door_transition': doorTransition,
+      'door_online': doorOnline,
       'last_updated': lastUpdated.toIso8601String(),
     };
   }
@@ -76,6 +104,8 @@ class DeviceStatus {
     bool? roofAutoMode,
     double? targetTemperature,
     int? peltierPwm,
+    String? doorTransition,
+    bool? doorOnline,
     DateTime? lastUpdated,
   }) {
     return DeviceStatus(
@@ -90,6 +120,8 @@ class DeviceStatus {
       roofAutoMode: roofAutoMode ?? this.roofAutoMode,
       targetTemperature: targetTemperature ?? this.targetTemperature,
       peltierPwm: peltierPwm ?? this.peltierPwm,
+      doorTransition: doorTransition ?? this.doorTransition,
+      doorOnline: doorOnline ?? this.doorOnline,
       lastUpdated: lastUpdated ?? this.lastUpdated,
     );
   }
