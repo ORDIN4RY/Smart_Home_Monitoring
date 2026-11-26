@@ -47,8 +47,15 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
   }
 
   Future<void> _initCamera() async {
+    if (mounted) {
+      setState(() {
+        _ready = false;
+        _error = null;
+      });
+    }
     try {
       _cameras = await availableCameras();
+      if (!mounted) return;
       if (_cameras.isEmpty) {
         setState(() => _error = 'Tidak ada kamera.');
         return;
@@ -57,18 +64,39 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
       _camIdx = front != -1 ? front : 0;
       await _startCam(_cameras[_camIdx]);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) {
+        setState(() {
+          _ready = false;
+          _error = '$e';
+        });
+      }
     }
   }
 
   Future<void> _startCam(CameraDescription desc) async {
-    await _cam?.dispose();
+    final previous = _cam;
+    _cam = null;
+    await previous?.dispose();
     final c = CameraController(desc, ResolutionPreset.medium, enableAudio: false, imageFormatGroup: ImageFormatGroup.jpeg);
     try {
       await c.initialize();
-      if (mounted) setState(() { _cam = c; _ready = true; _error = null; });
+      if (!mounted) {
+        await c.dispose();
+        return;
+      }
+      setState(() {
+        _cam = c;
+        _ready = true;
+        _error = null;
+      });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      await c.dispose();
+      if (mounted) {
+        setState(() {
+          _ready = false;
+          _error = '$e';
+        });
+      }
     }
   }
 
@@ -117,15 +145,15 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
             Expanded(
               child: _modeTabButton(
                 '🧠 Sistem Cerdas',
-                'Deep Learning (AI)',
+                'YuNet + SFace',
                 CameraTestMode.ai,
               ),
             ),
             const SizedBox(width: 6),
             Expanded(
               child: _modeTabButton(
-                '👁️ Computer Vision',
-                'Ekstraksi LBPH',
+                '👁️ CV Klasik',
+                'Haar + LBPH',
                 CameraTestMode.cv,
               ),
             ),
@@ -186,7 +214,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
       backgroundColor: AppColors.neuBase,
       appBar: AppBar(
         title: Text(
-          _mode == CameraTestMode.ai ? 'Uji Sistem Cerdas (AI)' : 'Uji Computer Vision (LBPH)',
+          _mode == CameraTestMode.ai ? 'Uji Sistem Cerdas' : 'Uji CV Klasik',
         ),
         actions: [
           if (_cameras.length > 1)
@@ -256,8 +284,8 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                                 const SizedBox(width: 10),
                                 Text(
                                   _busy
-                                      ? (_mode == CameraTestMode.ai ? 'Menganalisis AI (SFace)...' : 'Mengekstrak Fitur LBPH...')
-                                      : (_mode == CameraTestMode.ai ? 'Verifikasi Sistem Cerdas (AI)' : 'Ekstraksi & Uji CV (LBPH)'),
+                                      ? (_mode == CameraTestMode.ai ? 'Memproses AI...' : 'Memproses CV...')
+                                      : (_mode == CameraTestMode.ai ? 'Verifikasi AI' : 'Uji CV (LBPH)'),
                                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                                 ),
                               ],
@@ -286,7 +314,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
     final granted = r.granted;
     final color = isSpoof ? AppColors.danger : (granted ? AppColors.normal : AppColors.warning);
     final icon = isSpoof ? Icons.block : (granted ? Icons.check_circle : Icons.cancel_outlined);
-    final status = isSpoof ? 'SPOOF (AI)' : (granted ? 'DIIZINKAN' : 'DITOLAK');
+    final status = isSpoof ? 'SPOOF' : (granted ? 'DIIZINKAN' : 'DITOLAK');
 
     return NeuBox(
       padding: const EdgeInsets.all(16),
@@ -304,11 +332,11 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      r.matchedName ?? (isSpoof ? 'Wajah Palsu Terdeteksi' : 'Tidak Dikenal'),
+                      r.matchedName ?? (isSpoof ? 'Spoof Terdeteksi' : 'Tidak Dikenal'),
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
                     ),
                     Text(
-                      isCv ? 'Mode Computer Vision (Non-Pretrained)' : 'Mode Sistem Cerdas (Pretrained)',
+                      isCv ? 'CV Klasik (Haar + Color-LBP + LBPH)' : 'Sistem Cerdas (YuNet + MiniFASNet + SFace)',
                       style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
                     ),
                   ],
@@ -324,34 +352,22 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
           const SizedBox(height: 12),
 
           if (isCv) ...[
-            // Metrik khusus Computer Vision (Ekstraksi LBPH)
-            _metricRow('Metode', r.method ?? 'Haar + Ekstraksi LBPH (Non-Pretrained)'),
             _metricRow(
-              'Keaslian (CrCb + HS 1024-D 1-NN)',
+              'Liveness',
               r.distanceChi2Liveness != null && r.distanceChi2Spoof != null
-                  ? 'χ² Real: ${r.distanceChi2Liveness!.toStringAsFixed(3)} vs Spoof: ${r.distanceChi2Spoof!.toStringAsFixed(3)} • ${r.isSpoofAttack ? "SPOOF" : "REAL"}'
-                  : (r.distanceChi2Liveness != null
-                      ? 'χ²: ${r.distanceChi2Liveness!.toStringAsFixed(4)} (Ambang <= ${r.thresholdChi2Liveness?.toStringAsFixed(2) ?? "0.12"}) • ${r.isSpoofAttack ? "SPOOF / PALSU" : "REAL / ASLI"}'
-                      : '${(r.livenessScore * 100).toStringAsFixed(1)}% ${r.isSpoofAttack ? "SPOOF / PALSU" : "REAL / ASLI"}'),
+                  ? 'Real ${r.distanceChi2Liveness!.toStringAsFixed(3)} vs Spoof ${r.distanceChi2Spoof!.toStringAsFixed(3)} (${isSpoof ? "SPOOF" : "REAL"})'
+                  : (isSpoof ? 'SPOOF' : 'REAL'),
             ),
-            _metricRow('Jarak Chi-Square (FR)', r.distance != null ? '${r.distance!.toStringAsFixed(2)} (Ambang <= 34.0)' : '-'),
-            _metricRow('Kesesuaian Tekstur', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
-            _metricRow('Representasi Fitur', 'Grid Spasial 8x8 (16384-D LBPH)'),
-            if (r.latencyMs != null) _metricRow('Waktu Ekstraksi', '${r.latencyMs} ms'),
-
-            Container(
-              margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.neuBase,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border),
+            if (!isSpoof) ...[
+              _metricRow(
+                'Chi-Square (χ²)',
+                r.distance != null
+                    ? '${r.distance!.toStringAsFixed(2)} (≤ ${(r.threshold != null && r.threshold! > 1.0 ? r.threshold! : 23.0).toStringAsFixed(1)})'
+                    : '-',
               ),
-              child: const Text(
-                '💡 Karakteristik CV: Pengolahan murni berbasis citra tanpa model neural network maupun SVM. Evaluasi Chi-Square 2 tahap (Multi-Exemplar 1-NN): Gatekeeper 1 Liveness Komparasi Dual-Prototype Real vs Spoof (CrCb + HS 1024-D) dan Gatekeeper 2 LBPH Identitas (χ² ≤ 34.0).',
-                style: TextStyle(fontSize: 9.5, color: AppColors.textSecondary),
-              ),
-            ),
+              _metricRow('Dimensi Fitur', 'Grid 8×8 (16.384-D)'),
+            ],
+            if (r.latencyMs != null) _metricRow('Waktu', '${r.latencyMs} ms'),
 
             if (r.pipelinePreviews != null && r.pipelinePreviews!.isNotEmpty) ...[
               const SizedBox(height: 14),
@@ -359,7 +375,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    '🔬 Tahapan Ekstraksi Fitur (Visual):',
+                    '🔬 Tahapan Visual',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                   Text(
@@ -370,7 +386,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
               ),
               const SizedBox(height: 8),
               SizedBox(
-                height: 195,
+                height: 185,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: r.pipelinePreviews!.length,
@@ -378,7 +394,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                   itemBuilder: (ctx, idx) {
                     final p = r.pipelinePreviews![idx];
                     final b64 = p['image'] ?? '';
-                    final label = p['label'] ?? 'Tahap ';
+                    final label = p['label'] ?? 'Tahap ${idx + 1}';
                     final desc = p['desc'] ?? '';
                     if (b64.isEmpty) return const SizedBox.shrink();
 
@@ -386,7 +402,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                       onTap: () => _showZoomImageDialog(context, label, desc, b64),
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
-                        width: 150,
+                        width: 168,
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: AppColors.neuBase,
@@ -433,7 +449,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 desc,
-                                maxLines: 2,
+                                maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 9, color: AppColors.textSecondary),
                               ),
@@ -455,7 +471,7 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
                   childrenPadding: EdgeInsets.zero,
                   dense: true,
                   title: const Text(
-                    '📜 Log Alur Sistem Ilmiah (Tahapan)',
+                    '📜 Log Tahapan',
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                   children: r.pipelineStages!.map((s) => Padding(
@@ -474,11 +490,10 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
               ),
             ],
           ] else ...[
-            // Metrik Sistem Cerdas (Deep Learning: SFace + MiniFASNet)
-            _metricRow('Model Pengenal', 'SFace ONNX (128-D L2 Embedding)'),
-            _metricRow('Kemiripan Cosine', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
-            _metricRow('Liveness Anti-Spoof', '${(r.livenessScore * 100).toStringAsFixed(0)}% ${isSpoof ? "FAKE" : "REAL"}'),
-            if (r.latencyMs != null) _metricRow('Latency Inference', '${r.latencyMs} ms'),
+            _metricRow('Model', 'SFace (128-D)'),
+            _metricRow('Cosine', r.similarityScore != null ? '${(r.similarityScore! * 100).toStringAsFixed(1)}%' : '-'),
+            _metricRow('Liveness', '${(r.livenessScore * 100).toStringAsFixed(0)}% (${isSpoof ? "SPOOF" : "REAL"})'),
+            if (r.latencyMs != null) _metricRow('Waktu', '${r.latencyMs} ms'),
           ],
 
           if (r.message.isNotEmpty)
@@ -498,7 +513,16 @@ class _LiveCameraTestScreenState extends State<LiveCameraTestScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-          Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
         ],
       ),
     );

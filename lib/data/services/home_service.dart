@@ -247,7 +247,7 @@ class HomeService {
               : await XFile(fileOrPath.toString()).readAsBytes());
       request.files.add(http.MultipartFile.fromBytes('photo', bytes, filename: 'frame.jpg'));
 
-      final streamed = await request.send().timeout(const Duration(seconds: 5));
+      final streamed = await request.send().timeout(const Duration(seconds: 10));
       final response = await http.Response.fromStream(streamed);
       stopwatch.stop();
       final latency = stopwatch.elapsedMilliseconds;
